@@ -130,6 +130,35 @@ celery -A taskraptor worker       # worker
 celery -A taskraptor beat         # beat
 ```
 
+### Railway
+
+This repo includes a production `Dockerfile` for Railway. The container:
+
+- builds the Vite frontend,
+- installs Python dependencies with `uv`,
+- runs `collectstatic` at image build time,
+- runs `migrate` on startup before launching Gunicorn.
+
+Minimum web service variables:
+
+```bash
+DJANGO_SETTINGS_MODULE=taskraptor.settings.production
+SECRET_KEY=<strong-random-secret>
+ALLOWED_HOSTS=dashboard.taskraptor.app
+CSRF_TRUSTED_ORIGINS=https://dashboard.taskraptor.app
+```
+
+Back the web service with Railway Postgres and Redis, then provide:
+
+```bash
+PGDATABASE=...
+PGUSER=...
+PGPASSWORD=...
+PGHOST=...
+PGPORT=...
+REDIS_URL=...
+```
+
 ## Testing
 
 ```bash
