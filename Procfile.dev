@@ -1,0 +1,4 @@
+django: uv run python manage.py runserver
+worker: uv run celery -A taskraptor worker --loglevel=info
+beat: uv run celery -A taskraptor beat --loglevel=info
+frontend: npm --prefix frontend run dev

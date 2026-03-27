@@ -17,15 +17,20 @@ tasks:
     cmds:
       - uv run python manage.py runserver
 
+  dev:
+    desc: Start Django, Celery worker, Celery Beat, and Vite with Overmind
+    cmds:
+      - overmind start -f Procfile.dev
+
   worker:
     desc: Start Celery worker
     cmds:
-      - uv run celery -A taskraptor worker -l info
+      - uv run celery -A taskraptor worker --loglevel=info
 
   beat:
     desc: Start Celery Beat scheduler
     cmds:
-      - uv run celery -A taskraptor beat -l info
+      - uv run celery -A taskraptor beat --loglevel=info
 
   frontend:dev:
     desc: Start Vite dev server on :5173

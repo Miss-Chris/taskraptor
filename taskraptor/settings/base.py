@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from celery.schedules import crontab
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 INSTALLED_APPS = [
@@ -94,3 +96,9 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "UTC"
 CELERY_BEAT_SCHEDULER = "celery.beat:PersistentScheduler"
+CELERY_BEAT_SCHEDULE = {
+    "worker-heartbeat-log-every-5-minutes": {
+        "task": "apps.tasks.tasks.log_worker_heartbeat",
+        "schedule": crontab(minute="*/5"),
+    }
+}

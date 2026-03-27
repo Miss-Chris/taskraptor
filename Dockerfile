@@ -24,9 +24,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 ENV PATH="/root/.local/bin:${PATH}"
 
-COPY pyproject.toml uv.lock manage.py ./
+COPY pyproject.toml uv.lock manage.py Taskfile.yml ./
 COPY taskraptor/ ./taskraptor/
 COPY apps/ ./apps/
 
