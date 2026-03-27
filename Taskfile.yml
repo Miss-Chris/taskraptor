@@ -1,0 +1,55 @@
+version: "3"
+
+tasks:
+  install:
+    desc: Install all dependencies (Python + Node)
+    cmds:
+      - uv sync
+      - cd frontend && npm install
+
+  migrate:
+    desc: Run Django database migrations
+    cmds:
+      - uv run python manage.py migrate
+
+  run:
+    desc: Start Django development server on :8000
+    cmds:
+      - uv run python manage.py runserver
+
+  worker:
+    desc: Start Celery worker
+    cmds:
+      - uv run celery -A taskraptor worker -l info
+
+  beat:
+    desc: Start Celery Beat scheduler
+    cmds:
+      - uv run celery -A taskraptor beat -l info
+
+  frontend:dev:
+    desc: Start Vite dev server on :5173
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  frontend:build:
+    desc: Build frontend for production
+    dir: frontend
+    cmds:
+      - npm run build
+
+  test:
+    desc: Run E2E test suite (requires Postgres)
+    cmds:
+      - uv run pytest tests/
+
+  createsuperuser:
+    desc: Create a Django superuser
+    cmds:
+      - uv run python manage.py createsuperuser
+
+  shell:
+    desc: Open Django shell
+    cmds:
+      - uv run python manage.py shell
