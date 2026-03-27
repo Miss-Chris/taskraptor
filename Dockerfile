@@ -35,8 +35,10 @@ RUN uv sync --frozen --no-dev
 
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY docker/entrypoint.sh /entrypoint.sh
+COPY docker/start-worker.sh /start-worker.sh
+COPY docker/start-beat.sh /start-beat.sh
 
-RUN chmod +x /entrypoint.sh \
+RUN chmod +x /entrypoint.sh /start-worker.sh /start-beat.sh \
     && SECRET_KEY=build-time-secret \
        REDIS_URL=redis://localhost:6379/0 \
        PGDATABASE=taskraptor \

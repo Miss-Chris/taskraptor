@@ -12,14 +12,13 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("PGDATABASE", "taskraptor"),
-        "USER": os.environ.get("PGUSER", "postgres"),
-        "PASSWORD": os.environ.get("PGPASSWORD", ""),
-        "HOST": os.environ.get("PGHOST", "localhost"),
-        "PORT": os.environ.get("PGPORT", "5432"),
-    }
+    "default": postgres_database_config(
+        default_name="taskraptor",
+        default_user="postgres",
+        default_password="",
+        default_host="localhost",
+        default_port="5432",
+    )
 }
 
 CELERY_BROKER_URL = os.environ["REDIS_URL"]

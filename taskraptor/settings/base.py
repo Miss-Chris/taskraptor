@@ -1,8 +1,42 @@
+import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def postgres_database_config(
+    *,
+    default_name: str,
+    default_user: str,
+    default_password: str,
+    default_host: str,
+    default_port: str,
+) -> dict[str, str]:
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"}:
+            raise ValueError("DATABASE_URL must use postgres:// or postgresql://")
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")) or default_name,
+            "USER": unquote(parsed.username or default_user),
+            "PASSWORD": unquote(parsed.password or default_password),
+            "HOST": parsed.hostname or default_host,
+            "PORT": str(parsed.port or default_port),
+        }
+
+    return {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("PGDATABASE", default_name),
+        "USER": os.environ.get("PGUSER", default_user),
+        "PASSWORD": os.environ.get("PGPASSWORD", default_password),
+        "HOST": os.environ.get("PGHOST", default_host),
+        "PORT": os.environ.get("PGPORT", default_port),
+    }
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -95,6 +129,7 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "UTC"
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BEAT_SCHEDULER = "celery.beat:PersistentScheduler"
 CELERY_BEAT_SCHEDULE = {
     "worker-heartbeat-log-every-5-minutes": {
