@@ -55,6 +55,13 @@ Production uses one Docker image for all app services. Railway decides whether a
 - `worker`: starts Celery worker
 - `beat`: starts Celery Beat
 
+Production worker defaults are intentionally conservative to keep Railway CPU and memory usage down:
+
+- `CELERY_WORKER_POOL=solo`
+- `CELERY_WORKER_CONCURRENCY=1`
+
+Override those only if queue throughput actually requires more parallelism.
+
 One-time Railway setup:
 
 1. Create `web`, `worker`, and `beat` services from this repo.
