@@ -55,6 +55,10 @@ Production uses one Docker image for all app services. Railway decides whether a
 - `worker`: starts Celery worker
 - `beat`: starts Celery Beat
 
+Shared Railway build/deploy settings live in [railway.toml](/Users/anirudh/work/taskraptor/railway.toml). Railway config-as-code applies to build/deploy settings for a single deployment, so this file is a good fit for common Dockerfile and restart policy settings that should be identical on `web`, `worker`, and `beat`.
+
+Resource limits and service variables are still configured in Railway itself, not in `railway.toml`.
+
 Production worker defaults are intentionally conservative to keep Railway CPU and memory usage down:
 
 - `CELERY_WORKER_POOL=solo`
