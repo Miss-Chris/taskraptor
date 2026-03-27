@@ -105,6 +105,18 @@ def test_full_task_lifecycle(anon_client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_healthcheck_reports_database_access(client: Client) -> None:
+    User.objects.create_user(email="health@example.com", password="hunter2!")
+
+    resp = client.get("/healthz")
+
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert resp.json()["database"] == "reachable"
+    assert resp.json()["user_count"] == 1
+
+
+@pytest.mark.django_db
 @override_settings(
     NINJA_CSRF=True,
     MIDDLEWARE=[

@@ -1,5 +1,7 @@
 from django.contrib import admin
-from django.http import FileResponse, HttpResponse
+from django.contrib.auth import get_user_model
+from django.db import connections
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.urls import path, re_path
 from django.conf import settings
 from ninja import NinjaAPI
@@ -14,6 +16,31 @@ api = NinjaAPI(
 )
 api.add_router("/auth", auth_router, tags=["auth"])
 api.add_router("/tasks", tasks_router, tags=["tasks"])
+
+
+def healthcheck_view(request):
+    """Return a 200 only when the app can execute a real DB query."""
+    try:
+        user_count = get_user_model().objects.count()
+        db_name = connections["default"].settings_dict.get("NAME")
+    except Exception as exc:
+        return JsonResponse(
+            {
+                "ok": False,
+                "database": "unreachable",
+                "error": str(exc),
+            },
+            status=503,
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "database": "reachable",
+            "database_name": db_name,
+            "user_count": user_count,
+        }
+    )
 
 
 def spa_view(request):
@@ -31,5 +58,6 @@ def spa_view(request):
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", api.urls),
+    path("healthz", healthcheck_view),
     re_path(r"^.*$", spa_view),
 ]
