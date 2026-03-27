@@ -8,7 +8,7 @@ from apps.accounts.api import router as auth_router
 from apps.tasks.api import router as tasks_router
 
 api = NinjaAPI(
-    csrf=True,
+    csrf=settings.NINJA_CSRF,
     title="TaskRaptor API",
     version="1.0.0",
 )

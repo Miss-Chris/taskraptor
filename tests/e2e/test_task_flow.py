@@ -9,7 +9,8 @@ down the test database automatically. Set DJANGO_SETTINGS_MODULE in pytest.ini
 import json
 
 import pytest
-from django.test import Client
+from django.test import Client, override_settings
+
 
 from apps.accounts.models import User
 from apps.tasks.models import Task
@@ -101,3 +102,45 @@ def test_full_task_lifecycle(anon_client: Client) -> None:
     # After logout, /me should return 401.
     resp = anon_client.get("/api/auth/me")
     assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+@override_settings(
+    NINJA_CSRF=True,
+    MIDDLEWARE=[
+        "django.middleware.security.SecurityMiddleware",
+        "whitenoise.middleware.WhiteNoiseMiddleware",
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        "django.middleware.common.CommonMiddleware",
+        "django.middleware.csrf.CsrfViewMiddleware",
+        "django.contrib.auth.middleware.AuthenticationMiddleware",
+        "django.contrib.messages.middleware.MessageMiddleware",
+        "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    ],
+)
+def test_task_create_with_enforced_csrf_bootstrap() -> None:
+    client = Client(enforce_csrf_checks=True)
+    user = User.objects.create_user(email="csrf@example.com", password="hunter2!")
+
+    csrf_resp = client.get("/api/auth/csrf")
+    assert csrf_resp.status_code == 200
+    csrftoken = csrf_resp.cookies["csrftoken"].value
+
+    login_resp = client.post(
+        "/api/auth/login",
+        data=json.dumps({"email": "csrf@example.com", "password": "hunter2!"}),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=csrftoken,
+    )
+    assert login_resp.status_code == 200, login_resp.content
+    assert login_resp.json()["id"] == user.pk
+    csrftoken = client.cookies["csrftoken"].value
+
+    create_resp = client.post(
+        "/api/tasks/",
+        data=json.dumps({"description": "CSRF-safe task"}),
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=csrftoken,
+    )
+    assert create_resp.status_code == 200, create_resp.content
+    assert create_resp.json()["description"] == "CSRF-safe task"

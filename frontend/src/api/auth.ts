@@ -6,6 +6,12 @@ export interface User {
 }
 
 export const authApi = {
+  register: (email: string, password: string) =>
+    apiRequest<User>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
   login: (email: string, password: string) =>
     apiRequest<User>("/api/auth/login", {
       method: "POST",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
@@ -76,6 +76,13 @@ export function LoginPage() {
             {login.isPending ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Don't have an account?{" "}
+          <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   );

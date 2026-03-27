@@ -7,6 +7,19 @@ function getCsrfToken(): string {
   return match ? decodeURIComponent(match[1]) : "";
 }
 
+function isSafeMethod(method?: string): boolean {
+  const normalized = method?.toUpperCase() ?? "GET";
+  return ["GET", "HEAD", "OPTIONS", "TRACE"].includes(normalized);
+}
+
+async function ensureCsrfCookie(): Promise<void> {
+  if (getCsrfToken()) return;
+
+  await fetch("/api/auth/csrf", {
+    credentials: "include",
+  });
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -21,6 +34,10 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  if (!isSafeMethod(options.method)) {
+    await ensureCsrfCookie();
+  }
+
   const res = await fetch(path, {
     credentials: "include",
     headers: {

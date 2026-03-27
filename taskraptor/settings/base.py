@@ -76,6 +76,9 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Ninja API CSRF — disabled in local.py, enforced in production.py
+NINJA_CSRF = True
+
 # Sessions
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_HTTPONLY = True
