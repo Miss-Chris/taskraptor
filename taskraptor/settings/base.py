@@ -137,3 +137,7 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute="*/5"),
     }
 }
+
+# Telegram
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_BASE_URL = os.environ.get("TELEGRAM_WEBHOOK_BASE_URL", "")

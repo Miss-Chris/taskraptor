@@ -12,3 +12,5 @@ frontend/node_modules/
 .pytest_cache/
 .ruff_cache/
 *.tsbuildinfo
+.idea/*
+celerybeat-schedule.db

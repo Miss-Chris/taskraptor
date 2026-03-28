@@ -45,6 +45,16 @@ App: `http://localhost:5173`
 
 API docs: `http://localhost:8000/api/docs`
 
+Telegram local dev:
+
+```bash
+TELEGRAM_BOT_TOKEN=<bot-token>
+TELEGRAM_WEBHOOK_BASE_URL=https://<your-tunnel-host>
+uv run python manage.py set_telegram_webhook
+```
+
+Use `TELEGRAM_WEBHOOK_BASE_URL` with ngrok or cloudflared so Telegram can reach `POST /api/channels/telegram/webhook`.
+
 ## Deploying
 
 This repo deploys to Railway with the included [Dockerfile](/Users/anirudh/work/taskraptor/Dockerfile).

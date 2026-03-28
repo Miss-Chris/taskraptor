@@ -7,6 +7,7 @@ from django.conf import settings
 from ninja import NinjaAPI
 
 from apps.accounts.api import router as auth_router
+from apps.channels.api import router as channels_router, telegram_webhook_view
 from apps.tasks.api import router as tasks_router
 
 api = NinjaAPI(
@@ -15,6 +16,7 @@ api = NinjaAPI(
     version="1.0.0",
 )
 api.add_router("/auth", auth_router, tags=["auth"])
+api.add_router("/channels", channels_router, tags=["channels"])
 api.add_router("/tasks", tasks_router, tags=["tasks"])
 
 
@@ -57,6 +59,8 @@ def spa_view(request):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/channels/telegram/webhook", telegram_webhook_view),
+    path("api/channels/telegram/webhook/", telegram_webhook_view),
     path("api/", api.urls),
     path("healthz", healthcheck_view),
     re_path(r"^.*$", spa_view),

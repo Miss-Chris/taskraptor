@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "../api/auth";
+import { TelegramChannelCard } from "../components/TelegramChannelCard";
 import { tasksApi } from "../api/tasks";
 import { CreateTaskForm } from "../components/CreateTaskForm";
 import { TaskItem } from "../components/TaskItem";
@@ -49,6 +50,7 @@ export function TasksPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-6 py-8 space-y-6">
+        <TelegramChannelCard />
         <CreateTaskForm />
 
         {isLoading ? (
