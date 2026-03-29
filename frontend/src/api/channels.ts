@@ -23,4 +23,7 @@ export const channelsApi = {
       method: "POST",
       body: JSON.stringify({ regenerate }),
     }),
+
+  unlinkTelegram: () =>
+    apiRequest<ChannelStatus>("/api/channels/telegram", { method: "DELETE" }),
 };

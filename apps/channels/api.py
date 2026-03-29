@@ -70,6 +70,12 @@ def get_channels(request: HttpRequest):
     return _serialize_channel_status(request.user)
 
 
+@router.delete("/telegram", auth=django_auth, response=ChannelStatusOut)
+def unlink_telegram(request: HttpRequest):
+    Channel.objects.filter(user=request.user, channel_type=ChannelType.TELEGRAM).delete()
+    return _serialize_channel_status(request.user)
+
+
 @router.post("/requests/telegram", auth=django_auth, response=ChannelStatusOut)
 def create_telegram_request(request: HttpRequest, data: ChannelRequestCreateIn):
     pending_request = _get_pending_request(request.user)
