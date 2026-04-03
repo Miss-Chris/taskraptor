@@ -4,37 +4,6 @@ from django.conf import settings
 from django.db import models
 
 
-class Todo(models.Model):
-    class Priority(models.TextChoices):
-        LOW = "low", "Low"
-        MEDIUM = "medium", "Medium"
-        HIGH = "high", "High"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="todos"
-    )
-    title = models.CharField(max_length=500)
-    notes = models.TextField(blank=True, default="")
-    priority = models.CharField(
-        max_length=10, choices=Priority.choices, default=Priority.MEDIUM
-    )
-    tags = models.JSONField(default=list)
-    is_completed = models.BooleanField(default=False)
-    due_date = models.DateField(null=True, blank=True)
-    due_time = models.TimeField(null=True, blank=True)
-    alarm_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return self.title
-
-
 class AgentRun(models.Model):
     class TriggerType(models.TextChoices):
         USER = "user", "User"
@@ -118,28 +87,6 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:50]}"
-
-
-class Schedule(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="schedules"
-    )
-    instruction = models.TextField()
-    cron_expression = models.CharField(max_length=100, blank=True)
-    is_recurring = models.BooleanField(default=True)
-    is_active = models.BooleanField(default=True)
-    next_run_at = models.DateTimeField(db_index=True)
-    related_todo = models.ForeignKey(
-        Todo, on_delete=models.SET_NULL, null=True, blank=True, related_name="schedules"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["next_run_at"]
-
-    def __str__(self):
-        return f"Schedule: {self.instruction[:50]}"
 
 
 class UserProfile(models.Model):

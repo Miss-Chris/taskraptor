@@ -35,11 +35,6 @@ def respond_block(message: str, id: str = "respond_id") -> FakeContentBlock:
 
 
 class FakeLLMClient:
-    """
-    Injectable fake LLM client. Each call to create_message pops
-    the next FakeMessage from the response queue.
-    """
-
     def __init__(self, responses: list[FakeMessage]) -> None:
         self._responses = list(responses)
         self.call_count = 0
@@ -65,13 +60,5 @@ class FakeLLMClient:
             }
         )
         if not self._responses:
-            # Return end_turn if queue exhausted
             return FakeMessage(content=[end_turn_block()])
         return self._responses.pop(0)
-
-
-class RaisingLLMClient:
-    """Always raises an exception — for error path testing."""
-
-    def create_message(self, **kwargs: Any) -> None:
-        raise RuntimeError("LLM unavailable")

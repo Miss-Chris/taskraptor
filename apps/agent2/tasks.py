@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from celery import shared_task
 
-from apps.agent.models import AgentRun
 from apps.channels.models import Channel, ChannelType
 from apps.channels.telegram import TelegramApiError, send_telegram_message
 
+from .models import AgentRun
 from .service import handle_message
 
 

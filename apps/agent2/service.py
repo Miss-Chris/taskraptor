@@ -4,9 +4,9 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from apps.agent.models import AgentRun, ChatMessage, ToolCall, UserProfile
 from apps.tasks.models import Task
 
+from .models import AgentRun, ChatMessage, ToolCall, UserProfile
 from .runtime import estimate_initial_tokens, run_agent
 from .schemas import AgentRequest, AgentTokenEstimate, ConversationEntry, TaskContextEntry
 from .tools import build_task_tools

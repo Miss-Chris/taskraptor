@@ -1,6 +1,6 @@
 import pytest
 
-from apps.agent.models import AgentRun, ChatMessage, ToolCall, UserProfile
+from apps.agent2.models import AgentRun, ChatMessage, ToolCall, UserProfile
 from apps.agent2.schemas import AgentAction, AgentResponse, ToolCallResult
 
 

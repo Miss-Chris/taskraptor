@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.tasks",
     "apps.channels",
-    "apps.agent",
     "apps.agent2",
 ]
 
@@ -136,10 +135,6 @@ CELERY_BEAT_SCHEDULE = {
     "worker-heartbeat-log-every-5-minutes": {
         "task": "apps.tasks.tasks.log_worker_heartbeat",
         "schedule": crontab(minute="*/5"),
-    },
-    "dispatch-due-schedules": {
-        "task": "apps.agent.tasks.dispatch_due_schedules",
-        "schedule": crontab(minute="*"),
     },
 }
 

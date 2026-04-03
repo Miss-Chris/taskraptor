@@ -1,7 +1,7 @@
 import pytest
 
 from apps.accounts.models import User
-from apps.agent.models import UserProfile
+from apps.agent2.models import UserProfile
 
 
 @pytest.fixture
@@ -14,4 +14,3 @@ def user(db):
 @pytest.fixture
 def other_user(db):
     return User.objects.create_user(email="other-agent2@example.com", password="hunter2!")
-

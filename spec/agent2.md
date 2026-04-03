@@ -132,9 +132,7 @@ The old agent path had a few structural problems:
 
 Known gaps:
 
-- It still reuses the legacy `AgentRun`, `ToolCall`, and `ChatMessage` tables.
 - The prompt context is basic; there is no search/ranking layer beyond simple task queries.
-- There is not yet a dedicated `agent2` persistence model or separate admin/reporting surface.
 - The proactive scheduling policy is not yet fully redesigned; `agent2` only exposes the entrypoint for scheduled prompts.
 
 ## Intended Direction
@@ -142,7 +140,5 @@ Known gaps:
 The intended end state is:
 
 - `agent2` becomes the default task agent.
-- Remaining callers stop using `apps.agent`.
-- Legacy `Todo`/`Schedule`-specific workflows are removed or migrated.
+- Legacy `Todo`/`Schedule`-specific workflows are removed.
 - Prompt context becomes more deliberate, likely with stronger search and summarisation of relevant tasks.
-
