@@ -111,8 +111,21 @@ def _handle_telegram_webhook_payload(payload: dict) -> dict:
     if not chat_id:
         return {"ok": True}
 
+    linked_channel = (
+        Channel.objects.filter(channel_type=ChannelType.TELEGRAM, telegram_chat_id=chat_id)
+        .order_by("-created_at")
+        .first()
+    )
     match = JOIN_PATTERN.match(text)
     if not match:
+        if linked_channel and text:
+            from apps.agent2.tasks import run_agent2_for_telegram_message
+
+            run_agent2_for_telegram_message.delay(chat_id, text)
+            return {"ok": True}
+        if linked_channel:
+            _send_message_safe(chat_id, "Text messages only right now.")
+            return {"ok": True}
         _send_message_safe(chat_id, "Send JOIN <code> to connect your TaskRaptor account.")
         return {"ok": True}
 
