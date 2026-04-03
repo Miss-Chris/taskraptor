@@ -119,9 +119,9 @@ def _handle_telegram_webhook_payload(payload: dict) -> dict:
     match = JOIN_PATTERN.match(text)
     if not match:
         if linked_channel and text:
-            from apps.agent2.tasks import run_agent2_for_telegram_message
+            from apps.agent.tasks import run_agent_for_telegram_message
 
-            run_agent2_for_telegram_message.delay(chat_id, text)
+            run_agent_for_telegram_message.delay(chat_id, text)
             return {"ok": True}
         if linked_channel:
             _send_message_safe(chat_id, "Text messages only right now.")

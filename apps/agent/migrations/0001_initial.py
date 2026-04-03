@@ -85,7 +85,7 @@ class Migration(migrations.Migration):
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="tool_calls",
-                        to="agent2.agentrun",
+                        to="agent.agentrun",
                     ),
                 ),
                 (
@@ -121,7 +121,7 @@ class Migration(migrations.Migration):
                         null=True,
                         on_delete=django.db.models.deletion.SET_NULL,
                         related_name="messages",
-                        to="agent2.agentrun",
+                        to="agent.agentrun",
                     ),
                 ),
                 (

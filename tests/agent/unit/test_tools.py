@@ -1,6 +1,6 @@
 import pytest
 
-from apps.agent2.tools import complete_task, create_task, delete_task, list_tasks, search_tasks, update_task
+from apps.agent.tools import complete_task, create_task, delete_task, list_tasks, search_tasks, update_task
 from apps.tasks.models import Task
 
 
@@ -57,4 +57,3 @@ def test_update_and_delete_task(user):
     assert updated["data"]["description"] == "Draft weekly note"
     assert deleted["ok"] is True
     assert not Task.objects.filter(id=task.id).exists()
-

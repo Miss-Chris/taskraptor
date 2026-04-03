@@ -1,7 +1,7 @@
 import pytest
 
-from apps.agent2.models import AgentRun, ChatMessage, ToolCall, UserProfile
-from apps.agent2.schemas import AgentAction, AgentResponse, ToolCallResult
+from apps.agent.models import AgentRun, ChatMessage, ToolCall, UserProfile
+from apps.agent.schemas import AgentAction, AgentResponse, ToolCallResult
 
 
 def _fake_run_agent_factory(actions, stopped_reason="completed"):
@@ -18,7 +18,7 @@ def _fake_run_agent_factory(actions, stopped_reason="completed"):
 
 @pytest.mark.django_db
 def test_handle_message_persists_schedule_trigger(user, monkeypatch):
-    from apps.agent2 import service
+    from apps.agent import service
 
     monkeypatch.setattr(service, "run_agent", _fake_run_agent_factory([]))
 
@@ -32,7 +32,7 @@ def test_handle_message_persists_schedule_trigger(user, monkeypatch):
 
 @pytest.mark.django_db
 def test_handle_message_persists_user_before_assistant(user, monkeypatch):
-    from apps.agent2 import service
+    from apps.agent import service
 
     actions = [
         AgentAction(
@@ -62,7 +62,7 @@ def test_handle_message_persists_user_before_assistant(user, monkeypatch):
 
 @pytest.mark.django_db
 def test_profile_api_key_overrides_global_setting(user, monkeypatch, settings):
-    from apps.agent2 import service
+    from apps.agent import service
 
     UserProfile.objects.filter(user=user).update(
         preferences={"anthropic_api_key": "user-key"},
@@ -83,7 +83,7 @@ def test_profile_api_key_overrides_global_setting(user, monkeypatch, settings):
 
 @pytest.mark.django_db
 def test_estimate_message_tokens_uses_built_request_context(user, monkeypatch):
-    from apps.agent2 import service
+    from apps.agent import service
     from apps.tasks.models import Task
 
     Task.objects.create(user=user, description="Buy milk")

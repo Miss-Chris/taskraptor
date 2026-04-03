@@ -2,11 +2,11 @@
 
 ## Overview
 
-`agent2` is the new task agent workflow for TaskRaptor.
+`agent` is the task agent workflow for TaskRaptor.
 
 It replaces the older `apps.agent` todo-specific path with a workflow built on the main `Task` domain model in [`apps/tasks/models.py`](/Users/anirudh/work/taskraptor/apps/tasks/models.py). The goal is to keep the dashboard, API, Telegram bot, and agent operating on the same source of truth.
 
-At a high level, `agent2` does four things:
+At a high level, `agent` does four things:
 
 1. Builds a compact view of the user's current state.
 2. Sends that state plus the incoming message to Claude as a tool-calling prompt.
@@ -17,7 +17,7 @@ At a high level, `agent2` does four things:
 
 ### Runtime
 
-[`apps/agent2/runtime.py`](/Users/anirudh/work/taskraptor/apps/agent2/runtime.py) contains the core loop.
+[`apps/agent/runtime.py`](/Users/anirudh/work/taskraptor/apps/agent/runtime.py) contains the core loop.
 
 It:
 
@@ -29,7 +29,7 @@ It:
 
 ### Prompt
 
-[`apps/agent2/prompts.py`](/Users/anirudh/work/taskraptor/apps/agent2/prompts.py) defines the system prompt.
+[`apps/agent/prompts.py`](/Users/anirudh/work/taskraptor/apps/agent/prompts.py) defines the system prompt.
 
 The prompt is intentionally narrow:
 
@@ -41,7 +41,7 @@ The prompt is intentionally narrow:
 
 ### Tools
 
-[`apps/agent2/tools.py`](/Users/anirudh/work/taskraptor/apps/agent2/tools.py) defines the task-facing tools.
+[`apps/agent/tools.py`](/Users/anirudh/work/taskraptor/apps/agent/tools.py) defines the task-facing tools.
 
 Current tools:
 
@@ -56,7 +56,7 @@ Each tool operates directly on `Task` rows and returns structured JSON-like resu
 
 ### Service Layer
 
-[`apps/agent2/service.py`](/Users/anirudh/work/taskraptor/apps/agent2/service.py) is the application boundary.
+[`apps/agent/service.py`](/Users/anirudh/work/taskraptor/apps/agent/service.py) is the application boundary.
 
 It:
 
@@ -71,12 +71,12 @@ This is the main entry point for synchronous agent execution inside the app.
 
 ### Transport Tasks
 
-[`apps/agent2/tasks.py`](/Users/anirudh/work/taskraptor/apps/agent2/tasks.py) contains async entrypoints.
+[`apps/agent/tasks.py`](/Users/anirudh/work/taskraptor/apps/agent/tasks.py) contains async entrypoints.
 
 Current tasks:
 
-- `run_agent2_for_telegram_message(chat_id, text)`
-- `run_agent2_scheduled_prompt(user_id, text)`
+- `run_agent_for_telegram_message(chat_id, text)`
+- `run_agent_scheduled_prompt(user_id, text)`
 
 These tasks call the service layer, then deliver any assistant messages back to Telegram when a linked channel exists.
 
@@ -86,21 +86,21 @@ These tasks call the service layer, then deliver any assistant messages back to 
 
 1. Telegram sends a webhook to [`apps/channels/api.py`](/Users/anirudh/work/taskraptor/apps/channels/api.py).
 2. `JOIN <code>` messages are handled by the channel-linking path.
-3. Non-join messages from an already linked chat enqueue `run_agent2_for_telegram_message`.
-4. The task resolves the linked user and calls `agent2.service.handle_message(...)`.
+3. Non-join messages from an already linked chat enqueue `run_agent_for_telegram_message`.
+4. The task resolves the linked user and calls `agent.service.handle_message(...)`.
 5. `handle_message(...)` builds context, runs the runtime, persists logs, and returns user-facing messages.
 6. The Celery task sends those messages back to Telegram.
 
 ### Scheduled flow
 
 1. Some scheduler path decides a user should receive a proactive prompt.
-2. It enqueues `run_agent2_scheduled_prompt(user_id, text)`.
+2. It enqueues `run_agent_scheduled_prompt(user_id, text)`.
 3. The task runs `handle_message(...)` with `trigger_type="schedule"`.
 4. The reply is sent to the user's latest linked Telegram channel if one exists.
 
 ## Context Model
 
-`agent2` currently uses two context sources:
+`agent` currently uses two context sources:
 
 - Recent `ChatMessage` rows for the current channel.
 - A capped list of open `Task` rows.
@@ -109,10 +109,10 @@ This is deliberately simple. It gives the model enough context to act on recent 
 
 ## Token Usage
 
-`agent2` supports two token views:
+`agent` supports two token views:
 
 - Actual token usage from normal runs, recorded from Anthropic response metadata.
-- Preflight token estimation via [`estimate_initial_tokens()`](/Users/anirudh/work/taskraptor/apps/agent2/runtime.py#L149) and [`estimate_message_tokens()`](/Users/anirudh/work/taskraptor/apps/agent2/service.py#L79).
+- Preflight token estimation via [`estimate_initial_tokens()`](/Users/anirudh/work/taskraptor/apps/agent/runtime.py#L149) and [`estimate_message_tokens()`](/Users/anirudh/work/taskraptor/apps/agent/service.py#L79).
 
 When an Anthropic key is available, the estimator uses the API's `count_tokens` endpoint for the initial prompt. Otherwise it falls back to a heuristic estimate.
 
@@ -124,21 +124,21 @@ The old agent path had a few structural problems:
 - Transport, persistence, and runtime concerns were too tightly mixed.
 - Scheduled and interactive paths were not clearly separated.
 
-`agent2` keeps the same general tool-calling model, but moves it onto the real product domain and cleaner boundaries.
+`agent` keeps the same general tool-calling model, but moves it onto the real product domain and cleaner boundaries.
 
 ## Current Limitations
 
-`agent2` is intentionally incremental and not fully “done”.
+`agent` is intentionally incremental and not fully “done”.
 
 Known gaps:
 
 - The prompt context is basic; there is no search/ranking layer beyond simple task queries.
-- The proactive scheduling policy is not yet fully redesigned; `agent2` only exposes the entrypoint for scheduled prompts.
+- The proactive scheduling policy is not yet fully redesigned; `agent` only exposes the entrypoint for scheduled prompts.
 
 ## Intended Direction
 
 The intended end state is:
 
-- `agent2` becomes the default task agent.
+- `agent` is the default task agent.
 - Legacy `Todo`/`Schedule`-specific workflows are removed.
 - Prompt context becomes more deliberate, likely with stronger search and summarisation of relevant tasks.

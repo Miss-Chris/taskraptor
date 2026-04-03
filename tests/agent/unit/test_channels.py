@@ -6,8 +6,8 @@ from apps.channels.models import Channel, ChannelType
 
 
 @pytest.mark.django_db
-def test_linked_chat_enqueues_agent2_task(user, monkeypatch):
-    from apps.agent2.tasks import run_agent2_for_telegram_message
+def test_linked_chat_enqueues_agent_task(user, monkeypatch):
+    from apps.agent.tasks import run_agent_for_telegram_message
 
     Channel.objects.create(
         user=user,
@@ -18,7 +18,7 @@ def test_linked_chat_enqueues_agent2_task(user, monkeypatch):
     captured = {}
 
     monkeypatch.setattr(
-        run_agent2_for_telegram_message,
+        run_agent_for_telegram_message,
         "delay",
         lambda chat_id, text: captured.update({"chat_id": chat_id, "text": text}),
     )

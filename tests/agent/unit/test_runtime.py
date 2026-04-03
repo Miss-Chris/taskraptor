@@ -1,8 +1,8 @@
-from apps.agent2.runtime import run_agent
-from apps.agent2.runtime import estimate_initial_tokens
-from apps.agent2.schemas import AgentRequest
-from apps.agent2.tools import RegisteredTool
-from tests.agent2.fakes import FakeLLMClient, FakeMessage, end_turn_block, respond_block, tool_use_block
+from apps.agent.runtime import run_agent
+from apps.agent.runtime import estimate_initial_tokens
+from apps.agent.schemas import AgentRequest
+from apps.agent.tools import RegisteredTool
+from tests.agent.fakes import FakeLLMClient, FakeMessage, end_turn_block, respond_block, tool_use_block
 
 
 def _make_request(**kwargs) -> AgentRequest:

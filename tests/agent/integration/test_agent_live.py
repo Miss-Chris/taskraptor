@@ -1,14 +1,14 @@
 """
-Integration tests against the real Anthropic API for agent2.
+Integration tests against the real Anthropic API for agent.
 Skipped automatically if TEST_ANTHROPIC_API_KEY is not set.
 """
 import os
 
 import pytest
 
-from apps.agent2.runtime import estimate_initial_tokens, run_agent
-from apps.agent2.schemas import AgentRequest
-from apps.agent2.tools import build_task_tools
+from apps.agent.runtime import estimate_initial_tokens, run_agent
+from apps.agent.schemas import AgentRequest
+from apps.agent.tools import build_task_tools
 from apps.tasks.models import Task
 
 LIVE_API_KEY = os.environ.get("TEST_ANTHROPIC_API_KEY", "")
@@ -28,7 +28,7 @@ def _make_request(user_id: int, message: str) -> AgentRequest:
 
 @skip_without_key
 @pytest.mark.django_db
-def test_agent2_live_run_reports_tokens_and_estimate_is_reasonable(user):
+def test_agent_live_run_reports_tokens_and_estimate_is_reasonable(user):
     Task.objects.create(user=user, description="Buy groceries")
     Task.objects.create(user=user, description="Call dentist")
     request = _make_request(user.pk, "What tasks do I have?")

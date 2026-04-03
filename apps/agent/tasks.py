@@ -10,7 +10,7 @@ from .service import handle_message
 
 
 @shared_task
-def run_agent2_for_telegram_message(chat_id: int, text: str) -> list[str]:
+def run_agent_for_telegram_message(chat_id: int, text: str) -> list[str]:
     channel = (
         Channel.objects.filter(channel_type=ChannelType.TELEGRAM, telegram_chat_id=chat_id)
         .select_related("user")
@@ -29,7 +29,7 @@ def run_agent2_for_telegram_message(chat_id: int, text: str) -> list[str]:
 
 
 @shared_task
-def run_agent2_scheduled_prompt(user_id: int, text: str) -> list[str]:
+def run_agent_scheduled_prompt(user_id: int, text: str) -> list[str]:
     user_messages = handle_message(
         user_id=user_id,
         text=text,

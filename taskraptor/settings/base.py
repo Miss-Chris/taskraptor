@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.tasks",
     "apps.channels",
-    "apps.agent2",
+    "apps.agent",
 ]
 
 MIDDLEWARE = [
