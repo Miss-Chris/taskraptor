@@ -51,3 +51,9 @@ class AgentResponse(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
 
+
+class AgentTokenEstimate(BaseModel):
+    initial_input_tokens: int
+    estimated_output_tokens: int
+    estimated_total_tokens: int
+    method: Literal["anthropic_count_tokens", "heuristic"]

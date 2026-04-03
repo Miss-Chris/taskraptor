@@ -80,3 +80,29 @@ def test_profile_api_key_overrides_global_setting(user, monkeypatch, settings):
 
     assert captured["api_key"] == "user-key"
 
+
+@pytest.mark.django_db
+def test_estimate_message_tokens_uses_built_request_context(user, monkeypatch):
+    from apps.agent2 import service
+    from apps.tasks.models import Task
+
+    Task.objects.create(user=user, description="Buy milk")
+    ChatMessage.objects.create(user=user, role="user", content="Earlier", channel="telegram:1")
+    captured = {}
+
+    def fake_estimate(request, tools, llm_client=None):
+        captured["message"] = request.message
+        captured["history_len"] = len(request.conversation_history)
+        captured["open_tasks_len"] = len(request.open_tasks)
+        return "estimate"
+
+    monkeypatch.setattr(service, "estimate_initial_tokens", fake_estimate)
+
+    result = service.estimate_message_tokens(user.pk, "Add oat milk", "telegram:1")
+
+    assert result == "estimate"
+    assert captured == {
+        "message": "Add oat milk",
+        "history_len": 1,
+        "open_tasks_len": 1,
+    }

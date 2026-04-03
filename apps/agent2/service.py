@@ -7,8 +7,8 @@ from django.utils import timezone
 from apps.agent.models import AgentRun, ChatMessage, ToolCall, UserProfile
 from apps.tasks.models import Task
 
-from .runtime import run_agent
-from .schemas import AgentRequest, ConversationEntry, TaskContextEntry
+from .runtime import estimate_initial_tokens, run_agent
+from .schemas import AgentRequest, AgentTokenEstimate, ConversationEntry, TaskContextEntry
 from .tools import build_task_tools
 
 MAX_CONVERSATION_HISTORY = 8
@@ -22,38 +22,7 @@ def handle_message(
     *,
     trigger_type: str = AgentRun.TriggerType.USER,
 ) -> list[str]:
-    profile = UserProfile.objects.filter(user_id=user_id).first()
-    user_timezone = profile.timezone if profile else "UTC"
-    api_key = _resolve_api_key(profile)
-
-    recent_messages = list(
-        ChatMessage.objects.filter(user_id=user_id, channel=channel)
-        .order_by("-created_at")[:MAX_CONVERSATION_HISTORY]
-    )
-    conversation_history = [
-        ConversationEntry(role=message.role, content=message.content)
-        for message in reversed(recent_messages)
-    ]
-
-    open_tasks = [
-        TaskContextEntry(
-            id=task.id,
-            description=task.description,
-            status=task.status,
-            due_at=task.due_at.isoformat() if task.due_at else None,
-        )
-        for task in Task.objects.filter(user_id=user_id, status=Task.Status.PENDING)
-        .order_by("due_at", "-created_at")[:MAX_OPEN_TASK_CONTEXT]
-    ]
-
-    request = AgentRequest(
-        api_key=api_key,
-        user_id=user_id,
-        user_timezone=user_timezone,
-        message=text,
-        conversation_history=conversation_history,
-        open_tasks=open_tasks,
-    )
+    request = _build_agent_request(user_id=user_id, text=text, channel=channel)
     tools = build_task_tools(user_id)
 
     with transaction.atomic():
@@ -107,6 +76,16 @@ def handle_message(
     return user_messages
 
 
+def estimate_message_tokens(
+    user_id: int,
+    text: str,
+    channel: str,
+) -> AgentTokenEstimate:
+    request = _build_agent_request(user_id=user_id, text=text, channel=channel)
+    tools = build_task_tools(user_id)
+    return estimate_initial_tokens(request, tools)
+
+
 def _resolve_api_key(profile: UserProfile | None) -> str:
     if profile:
         api_key = profile.preferences.get("anthropic_api_key")
@@ -114,3 +93,37 @@ def _resolve_api_key(profile: UserProfile | None) -> str:
             return api_key.strip()
     return settings.ANTHROPIC_API_KEY
 
+
+def _build_agent_request(user_id: int, text: str, channel: str) -> AgentRequest:
+    profile = UserProfile.objects.filter(user_id=user_id).first()
+    user_timezone = profile.timezone if profile else "UTC"
+    api_key = _resolve_api_key(profile)
+
+    recent_messages = list(
+        ChatMessage.objects.filter(user_id=user_id, channel=channel)
+        .order_by("-created_at")[:MAX_CONVERSATION_HISTORY]
+    )
+    conversation_history = [
+        ConversationEntry(role=message.role, content=message.content)
+        for message in reversed(recent_messages)
+    ]
+
+    open_tasks = [
+        TaskContextEntry(
+            id=task.id,
+            description=task.description,
+            status=task.status,
+            due_at=task.due_at.isoformat() if task.due_at else None,
+        )
+        for task in Task.objects.filter(user_id=user_id, status=Task.Status.PENDING)
+        .order_by("due_at", "-created_at")[:MAX_OPEN_TASK_CONTEXT]
+    ]
+
+    return AgentRequest(
+        api_key=api_key,
+        user_id=user_id,
+        user_timezone=user_timezone,
+        message=text,
+        conversation_history=conversation_history,
+        open_tasks=open_tasks,
+    )

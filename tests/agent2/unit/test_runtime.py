@@ -1,4 +1,5 @@
 from apps.agent2.runtime import run_agent
+from apps.agent2.runtime import estimate_initial_tokens
 from apps.agent2.schemas import AgentRequest
 from apps.agent2.tools import RegisteredTool
 from tests.agent.fakes import FakeLLMClient, FakeMessage, end_turn_block, respond_block, tool_use_block
@@ -87,3 +88,23 @@ def test_tool_results_are_compacted_before_follow_up_llm_call():
     assert "created_at" not in tool_result_payload
     assert '"count": 1' in tool_result_payload
 
+
+def test_estimate_initial_tokens_uses_count_tokens_when_available():
+    class CountingClient:
+        def count_tokens(self, *, model, system, messages, tools):
+            return 321
+
+    tools = []
+
+    estimate = estimate_initial_tokens(_make_request(), tools, llm_client=CountingClient())
+
+    assert estimate.initial_input_tokens == 321
+    assert estimate.method == "anthropic_count_tokens"
+
+
+def test_estimate_initial_tokens_falls_back_to_heuristic():
+    estimate = estimate_initial_tokens(_make_request(message="Add buy milk"), [], llm_client=FakeLLMClient([]))
+
+    assert estimate.initial_input_tokens > 0
+    assert estimate.estimated_total_tokens >= estimate.initial_input_tokens
+    assert estimate.method == "heuristic"

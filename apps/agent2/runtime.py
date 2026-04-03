@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import zoneinfo
+from math import ceil
 from datetime import datetime
 
 from .llm import AnthropicClient, LLMClient
 from .prompts import build_system_prompt
-from .schemas import AgentAction, AgentRequest, AgentResponse, ToolCallResult
+from .schemas import AgentAction, AgentRequest, AgentResponse, AgentTokenEstimate, ToolCallResult
 from .tools import (
     RESPOND_TO_USER_DEFINITION,
     RegisteredTool,
@@ -23,24 +24,8 @@ def run_agent(
     if llm_client is None:
         llm_client = AnthropicClient(api_key=request.api_key)
 
+    system, messages, all_tools = _build_runtime_inputs(request, tools)
     tool_map = {tool.name: tool for tool in tools}
-    all_tools = [tool.as_llm_definition() for tool in tools] + [RESPOND_TO_USER_DEFINITION]
-
-    try:
-        tz = zoneinfo.ZoneInfo(request.user_timezone)
-    except zoneinfo.ZoneInfoNotFoundError:
-        tz = zoneinfo.ZoneInfo("UTC")
-
-    system = build_system_prompt(
-        timezone=request.user_timezone,
-        current_time=datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z"),
-        open_tasks=request.open_tasks,
-    )
-    messages: list[dict] = [
-        {"role": entry.role, "content": entry.content}
-        for entry in request.conversation_history
-    ]
-    messages.append({"role": "user", "content": request.message})
 
     actions: list[AgentAction] = []
     action_index = 0
@@ -160,3 +145,74 @@ def run_agent(
         output_tokens=total_output_tokens,
     )
 
+
+def estimate_initial_tokens(
+    request: AgentRequest,
+    tools: list[RegisteredTool],
+    llm_client: LLMClient | None = None,
+) -> AgentTokenEstimate:
+    system, messages, all_tools = _build_runtime_inputs(request, tools)
+
+    if llm_client is None:
+        llm_client = AnthropicClient(api_key=request.api_key)
+
+    if hasattr(llm_client, "count_tokens"):
+        try:
+            initial_input_tokens = llm_client.count_tokens(
+                model=request.model,
+                system=system,
+                messages=messages,
+                tools=all_tools,
+            )
+            return AgentTokenEstimate(
+                initial_input_tokens=initial_input_tokens,
+                estimated_output_tokens=request.llm_max_tokens,
+                estimated_total_tokens=initial_input_tokens + request.llm_max_tokens,
+                method="anthropic_count_tokens",
+            )
+        except Exception:
+            pass
+
+    initial_input_tokens = _estimate_tokens_heuristically(
+        {
+            "model": request.model,
+            "system": system,
+            "messages": messages,
+            "tools": all_tools,
+        }
+    )
+    return AgentTokenEstimate(
+        initial_input_tokens=initial_input_tokens,
+        estimated_output_tokens=min(request.llm_max_tokens, 300),
+        estimated_total_tokens=initial_input_tokens + min(request.llm_max_tokens, 300),
+        method="heuristic",
+    )
+
+
+def _build_runtime_inputs(
+    request: AgentRequest,
+    tools: list[RegisteredTool],
+) -> tuple[str, list[dict], list[dict]]:
+    try:
+        tz = zoneinfo.ZoneInfo(request.user_timezone)
+    except zoneinfo.ZoneInfoNotFoundError:
+        tz = zoneinfo.ZoneInfo("UTC")
+
+    system = build_system_prompt(
+        timezone=request.user_timezone,
+        current_time=datetime.now(tz).strftime("%Y-%m-%d %H:%M %Z"),
+        open_tasks=request.open_tasks,
+    )
+    messages: list[dict] = [
+        {"role": entry.role, "content": entry.content}
+        for entry in request.conversation_history
+    ]
+    messages.append({"role": "user", "content": request.message})
+    all_tools = [tool.as_llm_definition() for tool in tools] + [RESPOND_TO_USER_DEFINITION]
+    return system, messages, all_tools
+
+
+def _estimate_tokens_heuristically(payload: dict) -> int:
+    serialized = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+    # Crude fallback: 1 token ~= 4 characters for English-ish JSON payloads.
+    return ceil(len(serialized) / 4)

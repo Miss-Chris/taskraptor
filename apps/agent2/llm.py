@@ -15,6 +15,15 @@ class LLMClient(Protocol):
         max_tokens: int,
     ) -> Any: ...
 
+    def count_tokens(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: list[dict],
+        tools: list[dict],
+    ) -> int: ...
+
 
 class AnthropicClient:
     def __init__(self, api_key: str) -> None:
@@ -39,3 +48,18 @@ class AnthropicClient:
             max_tokens=max_tokens,
         )
 
+    def count_tokens(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: list[dict],
+        tools: list[dict],
+    ) -> int:
+        response = self._client.messages.count_tokens(
+            model=model,
+            system=system,
+            messages=messages,  # type: ignore[arg-type]
+            tools=tools,  # type: ignore[arg-type]
+        )
+        return int(response.input_tokens)
