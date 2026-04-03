@@ -19,6 +19,9 @@ from .tools import (
     update_todo,
 )
 
+MAX_CONVERSATION_HISTORY = 8
+MAX_TOOL_CALL_HISTORY = 5
+
 
 def handle_message(user_id: int, text: str, channel: str) -> list[str]:
     """Entry point for any transport layer. Returns user-facing message strings."""
@@ -30,18 +33,18 @@ def handle_message(user_id: int, text: str, channel: str) -> list[str]:
     except UserProfile.DoesNotExist:
         user_timezone = "UTC"
 
-    # 2. Fetch conversation history (last 20 messages for this user+channel)
+    # 2. Fetch recent conversation history for this user+channel.
     recent_messages = list(
-        ChatMessage.objects.filter(user_id=user_id, channel=channel).order_by("-created_at")[:20]
+        ChatMessage.objects.filter(user_id=user_id, channel=channel).order_by("-created_at")[:MAX_CONVERSATION_HISTORY]
     )
     conversation_history = [
         ConversationEntry(role=m.role, content=m.content)
         for m in reversed(recent_messages)
     ]
 
-    # 3. Fetch recent tool call history for the system prompt
+    # 3. Fetch recent tool call summaries for the system prompt.
     recent_tool_calls = list(
-        ToolCall.objects.filter(user_id=user_id).order_by("-created_at")[:10]
+        ToolCall.objects.filter(user_id=user_id).order_by("-created_at")[:MAX_TOOL_CALL_HISTORY]
     )
     tool_call_history = [
         ToolCallEntry(

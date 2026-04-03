@@ -65,6 +65,7 @@ class AgentRequest(BaseModel):
     model: str = "claude-sonnet-4-5"
     max_iterations: int = 15
     max_respond_calls: int = 3
+    llm_max_tokens: int = 1024
 
 
 class ToolCallResult(BaseModel):

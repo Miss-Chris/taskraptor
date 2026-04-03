@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,6 +43,7 @@ class FakeLLMClient:
     def __init__(self, responses: list[FakeMessage]) -> None:
         self._responses = list(responses)
         self.call_count = 0
+        self.calls: list[dict[str, Any]] = []
 
     def create_message(
         self,
@@ -53,6 +55,15 @@ class FakeLLMClient:
         max_tokens: int,
     ) -> FakeMessage:
         self.call_count += 1
+        self.calls.append(
+            {
+                "model": model,
+                "system": system,
+                "messages": copy.deepcopy(messages),
+                "tools": copy.deepcopy(tools),
+                "max_tokens": max_tokens,
+            }
+        )
         if not self._responses:
             # Return end_turn if queue exhausted
             return FakeMessage(content=[end_turn_block()])

@@ -158,3 +158,21 @@ def test_action_indexes_are_sequential():
 
     for expected_idx, action in enumerate(result.actions):
         assert action.index == expected_idx
+
+
+def test_tool_results_are_compacted_before_follow_up_llm_call():
+    client = FakeLLMClient(
+        responses=[
+            FakeMessage(content=[tool_use_block("list_todos", {}, id="t1")]),
+            FakeMessage(content=[respond_block("Done", id="r1")]),
+            FakeMessage(content=[end_turn_block()]),
+        ]
+    )
+    result = run_agent(_make_request(), make_in_memory_tool_context(), llm_client=client)
+
+    assert result.stopped_reason == "completed"
+    second_call_messages = client.calls[1]["messages"]
+    tool_result_payload = second_call_messages[-1]["content"][0]["content"]
+    assert "created_at" not in tool_result_payload
+    assert "updated_at" not in tool_result_payload
+    assert "\"count\"" in tool_result_payload

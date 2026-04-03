@@ -118,8 +118,8 @@ def test_handle_message_uses_profile_timezone(user, monkeypatch):
 @pytest.mark.django_db
 def test_conversation_history_is_passed_to_agent(user, monkeypatch):
     """
-    6 prior ChatMessages (alternating user/assistant) are all included
-    in the conversation_history passed to run_agent, in the correct order.
+    The most recent chat messages are included in the conversation_history
+    passed to run_agent, in the correct order.
     """
     from apps.agent import service
 
@@ -156,8 +156,8 @@ def test_conversation_history_is_passed_to_agent(user, monkeypatch):
 @pytest.mark.django_db
 def test_tool_call_history_is_passed_to_agent(user, monkeypatch):
     """
-    6 prior ToolCall records are all included in the tool_call_history passed
-    to run_agent, ordered oldest-first, with correct fields on each entry.
+    The most recent ToolCall records are included in the tool_call_history
+    passed to run_agent, ordered oldest-first, with correct fields on each entry.
     """
     from apps.agent import service
     from apps.agent.models import AgentRun
@@ -201,11 +201,40 @@ def test_tool_call_history_is_passed_to_agent(user, monkeypatch):
     service.handle_message(user.pk, "what's next?", "cli")
 
     tool_history = captured["tool_history"]
-    assert len(tool_history) == 6
-    for i, (idx, tool_name, tool_input, summary) in enumerate(prior_calls):
+    assert len(tool_history) == 5
+    expected_calls = prior_calls[-5:]
+    for i, (idx, tool_name, tool_input, summary) in enumerate(expected_calls):
         assert tool_history[i].tool_name == tool_name
         assert tool_history[i].summary == summary
         assert tool_history[i].tool_input == tool_input
+
+
+@pytest.mark.django_db
+def test_conversation_history_is_trimmed_to_recent_messages(user, monkeypatch):
+    from apps.agent import service
+
+    for i in range(12):
+        role = "user" if i % 2 == 0 else "assistant"
+        ChatMessage.objects.create(
+            user=user,
+            role=role,
+            content=f"message-{i}",
+            channel="cli",
+        )
+
+    captured = {}
+
+    def fake_run_agent(request, tool_context, llm_client=None):
+        captured["history"] = request.conversation_history
+        return AgentResponse(actions=[], stopped_reason="completed")
+
+    monkeypatch.setattr(service, "run_agent", fake_run_agent)
+
+    service.handle_message(user.pk, "latest?", "cli")
+
+    history = captured["history"]
+    assert len(history) == 8
+    assert [entry.content for entry in history] == [f"message-{i}" for i in range(4, 12)]
 
 
 @pytest.mark.django_db

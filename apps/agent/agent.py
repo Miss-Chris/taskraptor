@@ -54,7 +54,7 @@ def run_agent(
                 system=system,
                 messages=messages,
                 tools=all_tools,
-                max_tokens=4096,
+                max_tokens=request.llm_max_tokens,
             )
         except Exception as e:
             return AgentResponse(
@@ -142,7 +142,7 @@ def run_agent(
                 {
                     "type": "tool_result",
                     "tool_use_id": block.id,
-                    "content": json.dumps(output),
+                    "content": json.dumps(_compact_tool_output(tool_name, output)),
                 }
             )
 
@@ -171,3 +171,63 @@ def _format_tool_history(entries) -> str:
     for e in entries:
         lines.append(f"  [{e.index}] {e.tool_name}: {e.summary}")
     return "\n".join(lines)
+
+
+def _compact_tool_output(tool_name: str, output: dict) -> dict:
+    if not output.get("ok"):
+        return {"ok": False, "error": output.get("error", "unknown error")}
+
+    data = output.get("data")
+    if tool_name in {"list_todos", "search_todos"}:
+        todos = []
+        for todo in data or []:
+            todos.append(
+                {
+                    "id": todo.get("id"),
+                    "title": todo.get("title"),
+                    "priority": todo.get("priority"),
+                    "is_completed": todo.get("is_completed"),
+                    "due_date": todo.get("due_date"),
+                }
+            )
+        return {"ok": True, "count": output.get("count", len(todos)), "data": todos}
+
+    if tool_name in {"add_todo", "update_todo"} and isinstance(data, dict):
+        return {
+            "ok": True,
+            "data": {
+                "id": data.get("id"),
+                "title": data.get("title"),
+                "priority": data.get("priority"),
+                "is_completed": data.get("is_completed"),
+                "due_date": data.get("due_date"),
+            },
+        }
+
+    if tool_name == "create_schedule" and isinstance(data, dict):
+        return {
+            "ok": True,
+            "data": {
+                "id": data.get("id"),
+                "instruction": data.get("instruction"),
+                "is_recurring": data.get("is_recurring"),
+                "next_run_at": data.get("next_run_at"),
+            },
+        }
+
+    if tool_name == "list_schedules":
+        schedules = []
+        for schedule in data or []:
+            schedules.append(
+                {
+                    "id": schedule.get("id"),
+                    "instruction": schedule.get("instruction"),
+                    "next_run_at": schedule.get("next_run_at"),
+                }
+            )
+        return {"ok": True, "count": output.get("count", len(schedules)), "data": schedules}
+
+    if tool_name in {"delete_todo", "delete_schedule"} and isinstance(data, dict):
+        return {"ok": True, "data": {"id": data.get("id")}}
+
+    return {"ok": True}
