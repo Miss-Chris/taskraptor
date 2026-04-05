@@ -45,6 +45,17 @@ def test_llm_model(test_user, test_api_key):
 
 
 @pytest.fixture
+def test_llm_model_offline(test_user):
+    """LlmModel fixture that requires no real API key -- for scripted/offline tests."""
+    return LlmModel.objects.create(
+        user=test_user,
+        provider=LlmProvider.ANTHROPIC,
+        model_name=LlmModelName.CLAUDE_HAIKU,
+        api_key="sk-fake-never-used",
+    )
+
+
+@pytest.fixture
 def test_channel(test_user):
     return Channel.objects.create(
         user=test_user,

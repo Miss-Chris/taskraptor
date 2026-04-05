@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from typing import Callable
+
 from agent.llm import (
     InactiveLlmModelError,
     MissingApiKeyError,
@@ -31,6 +33,7 @@ def run_agent(
     llm_model: LlmModel,
     history: list[HistoryMessage],
     new_message: str,
+    llm_callable: Callable | None = None,
 ) -> AgentResult:
     """
     Run the agent loop.
@@ -42,7 +45,12 @@ def run_agent(
     Returns a pure AgentResult -- no DB writes are performed here.
     Callers are responsible for persisting AgentRun / MessageLog records using
     AgentResult.new_messages, which contains every message emitted in order.
+
+    ``llm_callable`` defaults to the real ``call_llm``; pass a scripted
+    replacement in tests to avoid hitting the network.
     """
+    _call = llm_callable if llm_callable is not None else call_llm
+
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         *[m.to_api_dict() for m in history],
@@ -63,7 +71,7 @@ def run_agent(
         while iterations < MAX_ITERATIONS:
             iterations += 1
 
-            response = call_llm(
+            response = _call(
                 llm_model,
                 messages,
                 tools=TOOL_DEFINITIONS,

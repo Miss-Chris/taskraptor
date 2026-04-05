@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Callable
 
 from django.utils import timezone
 
@@ -49,7 +50,11 @@ def _persist_messages(
         )
 
 
-def handle_user_incoming(conversation: Conversation, message: str) -> AgentResult:
+def handle_user_incoming(
+    conversation: Conversation,
+    message: str,
+    llm_callable: Callable | None = None,
+) -> AgentResult:
     """
     Orchestrate a single user turn for the given conversation.
 
@@ -90,6 +95,7 @@ def handle_user_incoming(conversation: Conversation, message: str) -> AgentResul
             llm_model=llm_model,
             history=history,
             new_message=message,
+            llm_callable=llm_callable,
         )
     except Exception as exc:
         agent_run.status = AgentRunStatus.FAILED
