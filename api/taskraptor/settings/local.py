@@ -4,6 +4,7 @@ SECRET_KEY = config("SECRET_KEY")
 
 # DeepSeek API key for platform `system_free` LLM configs (per-user quota on `LlmModel`).
 DEEPSEEK_API_KEY = config("DEEPSEEK_API_KEY", default="")
+USER_SESSION_TTL_DAYS = config("USER_SESSION_TTL_DAYS", default=30, cast=int)
 
 DEBUG = True
 

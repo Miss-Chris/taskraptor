@@ -5,10 +5,10 @@ from datetime import datetime
 from typing import Any
 
 from django.db import connection
-from django.utils import timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
-from tasks.models import Task
+from tasks.models import Task, TaskStatus
+from tasks.services import UNSET, create_task, soft_delete_task, update_task
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "priority": {"type": "integer"},
                     "due_at": {
                         "type": "string",
-                        "description": "ISO 8601 datetime, or null to clear.",
+                        "description": "ISO 8601 datetime. Use null or clear_due_at=true to remove it.",
+                    },
+                    "clear_due_at": {
+                        "type": "boolean",
+                        "description": "Set true to clear the due date.",
                     },
                     "tags": {
                         "type": "array",
@@ -143,19 +147,26 @@ class RespondToUserArgs(BaseModel):
 
 class CreateTaskArgs(BaseModel):
     name: str
-    status: str = "pending"
+    status: TaskStatus = TaskStatus.PENDING
     priority: int = 0
     due_at: str | None = None
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
 
 
 class EditTaskArgs(BaseModel):
     task_id: int
     name: str | None = None
-    status: str | None = None
+    status: TaskStatus | None = None
     priority: int | None = None
     due_at: str | None = None
+    clear_due_at: bool = False
     tags: list[str] | None = None
+
+    @model_validator(mode="after")
+    def validate_due_at_inputs(self) -> "EditTaskArgs":
+        if self.clear_due_at and self.due_at is not None:
+            raise ValueError("Cannot set due_at and clear_due_at together.")
+        return self
 
 
 class DeleteTaskArgs(BaseModel):
@@ -182,7 +193,7 @@ def _tool_respond_to_user(args: RespondToUserArgs, user_id: int) -> str:
 
 def _tool_create_task(args: CreateTaskArgs, user_id: int) -> str:
     due_at = _parse_due_at(args.due_at)
-    task = Task.objects.create(
+    task = create_task(
         user_id=user_id,
         name=args.name,
         status=args.status,
@@ -199,35 +210,31 @@ def _tool_edit_task(args: EditTaskArgs, user_id: int) -> str:
     except Task.DoesNotExist:
         return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
 
-    update_fields = []
-    if args.name is not None:
-        task.name = args.name
-        update_fields.append("name")
-    if args.status is not None:
-        task.status = args.status
-        update_fields.append("status")
-    if args.priority is not None:
-        task.priority = args.priority
-        update_fields.append("priority")
-    if args.due_at is not None:
-        task.due_at = _parse_due_at(args.due_at)
-        update_fields.append("due_at")
-    if args.tags is not None:
-        task.tags = args.tags
-        update_fields.append("tags")
+    due_at = UNSET
+    if "due_at" in args.model_fields_set:
+        due_at = _parse_due_at(args.due_at)
 
-    if update_fields:
-        task.save(update_fields=update_fields)
+    update_fields = update_task(
+        task,
+        audit_actor_id=user_id,
+        name=args.name if args.name is not None else UNSET,
+        status=args.status if args.status is not None else UNSET,
+        priority=args.priority if args.priority is not None else UNSET,
+        due_at=due_at,
+        tags=args.tags if args.tags is not None else UNSET,
+        clear_due_at=args.clear_due_at,
+    )
 
     return json.dumps({"ok": True, "task_id": task.pk, "updated_fields": update_fields})
 
 
 def _tool_delete_task(args: DeleteTaskArgs, user_id: int) -> str:
-    updated = Task.objects.filter(
-        pk=args.task_id, user_id=user_id, deleted_at__isnull=True
-    ).update(deleted_at=timezone.now())
-    if updated == 0:
+    try:
+        task = Task.objects.get(pk=args.task_id, user_id=user_id, deleted_at__isnull=True)
+    except Task.DoesNotExist:
         return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
+
+    soft_delete_task(task, audit_actor_id=user_id)
     return json.dumps({"ok": True, "task_id": args.task_id})
 
 

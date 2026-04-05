@@ -1,4 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth import authenticate
+from django.conf import settings
+from django.utils import timezone
 from ninja import Router, Status
 
 from accounts.bearer import AuthBearer
@@ -6,6 +10,10 @@ from accounts.models import User, UserSession
 from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut
 
 router = Router(tags=["auth"])
+
+
+def _default_session_expiry():
+    return timezone.now() + timedelta(days=settings.USER_SESSION_TTL_DAYS)
 
 
 @router.post("/register", response={201: TokenOut, 400: ErrorOut})
@@ -18,7 +26,10 @@ def register(request, payload: RegisterIn):
         email=payload.email,
         password=payload.password,
     )
-    session = UserSession.objects.create(user=user)
+    session = UserSession.objects.create(
+        user=user,
+        expires_at=_default_session_expiry(),
+    )
     return Status(201, {"token": str(session.token)})
 
 
@@ -28,7 +39,10 @@ def login(request, payload: LoginIn):
     if user is None:
         return Status(401, {"detail": "Invalid credentials."})
 
-    session = UserSession.objects.create(user=user)
+    session = UserSession.objects.create(
+        user=user,
+        expires_at=_default_session_expiry(),
+    )
     return Status(200, {"token": str(session.token)})
 
 

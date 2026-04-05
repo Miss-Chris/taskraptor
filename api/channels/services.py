@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.utils import timezone
+
 from channels.models import Channel, ChannelType, Conversation
 from channels.runtime import (
     BaseConversation,
@@ -32,3 +34,7 @@ def get_conversation(channel_id: int, conversation_id: int | None = None) -> Bas
             return DummyConversation(channel, conversation)
         case _:
             raise ValueError(f"Unknown channel type: {channel.type!r}")
+
+
+def touch_conversation(conversation_id: int) -> None:
+    Conversation.objects.filter(pk=conversation_id).update(updated_at=timezone.now())

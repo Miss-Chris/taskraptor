@@ -10,7 +10,7 @@ from agent.run import run_agent
 from agent.schemas import AgentResult
 from agent.utils import history_from_message_logs
 from channels.models import Channel, Conversation
-from channels.services import get_conversation
+from channels.services import get_conversation, touch_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,8 @@ def handle_user_incoming(
         agent_run.completed_at = timezone.now()
         agent_run.save(update_fields=["status", "error", "completed_at"])
         raise
+
+    touch_conversation(conversation.pk)
 
     status = AgentRunStatus.FAILED if result.error else AgentRunStatus.COMPLETED
     agent_run.status = status

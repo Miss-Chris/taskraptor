@@ -1,5 +1,10 @@
+from datetime import timedelta
+
 import pytest
 from django.test import Client
+from django.utils import timezone
+
+from accounts.models import UserSession
 
 REGISTER_URL = "/api/auth/register"
 LOGIN_URL = "/api/auth/login"
@@ -22,6 +27,9 @@ def test_register_success(client):
     data = response.json()
     assert "token" in data
     assert len(data["token"]) == 36  # UUID format
+    session = UserSession.objects.get(token=data["token"])
+    assert session.expires_at is not None
+    assert session.expires_at > timezone.now()
 
 
 @pytest.mark.django_db
@@ -95,4 +103,20 @@ def test_me_invalid_token(client):
         ME_URL,
         HTTP_AUTHORIZATION="Bearer 00000000-0000-0000-0000-000000000000",
     )
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_me_expired_token_rejected(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"username": "frank", "email": "frank@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+    UserSession.objects.filter(token=token).update(
+        expires_at=timezone.now() - timedelta(seconds=1)
+    )
+
+    response = client.get(ME_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
     assert response.status_code == 401

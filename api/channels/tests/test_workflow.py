@@ -7,11 +7,15 @@ bookkeeping, and channel delivery all run against the real test database.
 """
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from agent.models import AgentRun, AgentRunStatus, MessageLog
-from channels.runtime import DummyConversation
 from channels.models import Conversation
+from channels.runtime import DummyConversation
+from channels.services import get_conversation
 from channels.workflow import handle_system_message, handle_user_incoming
 from tasks.models import Task
 
@@ -196,3 +200,29 @@ def test_handle_system_message_creates_conversation_and_runs_agent(
 
     sent = DummyConversation._sent.get(conversation.pk, [])
     assert sent == ["Here are your top tasks."]
+
+
+@pytest.mark.django_db
+def test_workflow_touches_dummy_conversation_recency(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+):
+    older = Conversation.objects.create(channel=test_channel, title="Older")
+    newer = Conversation.objects.create(channel=test_channel, title="Newer")
+    Conversation.objects.filter(pk=older.pk).update(
+        updated_at=timezone.now() - timedelta(days=1)
+    )
+    older.refresh_from_db()
+    newer.refresh_from_db()
+    assert older.updated_at < newer.updated_at
+
+    result = _run(
+        older,
+        "Ping older conversation",
+        tool_call_response("respond_to_user", {"message": "Done."}),
+    )
+    assert result.error is None
+
+    latest = get_conversation(test_channel.pk)
+    assert latest.conversation.pk == older.pk

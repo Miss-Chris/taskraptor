@@ -30,11 +30,15 @@ def create_web_conversation(channel: Channel, title: str = "") -> Conversation:
 
 def record_user_message(conversation: Conversation, text: str) -> WebChatMessage:
     """Persist an incoming user-visible message."""
-    return WebChatMessage.objects.create(
+    from channels.services import touch_conversation
+
+    message = WebChatMessage.objects.create(
         conversation=conversation,
         role=WebChatRole.USER,
         content=text,
     )
+    touch_conversation(conversation.pk)
+    return message
 
 
 def record_assistant_message(
@@ -43,12 +47,16 @@ def record_assistant_message(
     agent_run: AgentRun | None = None,
 ) -> WebChatMessage:
     """Persist an assistant reply shown in the web UI."""
-    return WebChatMessage.objects.create(
+    from channels.services import touch_conversation
+
+    message = WebChatMessage.objects.create(
         conversation=conversation,
         role=WebChatRole.ASSISTANT,
         content=text,
         agent_run=agent_run,
     )
+    touch_conversation(conversation.pk)
+    return message
 
 
 def get_chat_history(

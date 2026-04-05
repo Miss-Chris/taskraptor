@@ -19,6 +19,7 @@ class AuditAction(models.TextChoices):
     NAME_CHANGED = "name_changed", "Name changed"
     PRIORITY_CHANGED = "priority_changed", "Priority changed"
     TAGS_CHANGED = "tags_changed", "Tags changed"
+    DELETED = "deleted", "Deleted"
 
 
 def _normalize_tags(tags):
@@ -73,6 +74,9 @@ class Task(models.Model):
     def save(self, *args, **kwargs):
         # Optional actor for audit rows; also accepted via kwargs by callers.
         audit_actor = kwargs.pop("audit_actor", None)
+        audit_actor_id = kwargs.pop("audit_actor_id", None)
+        if audit_actor_id is None and audit_actor is not None:
+            audit_actor_id = getattr(audit_actor, "pk", None)
         update_fields = kwargs.get("update_fields")
 
         tracked = {"status", "name", "priority", "tags"}
@@ -100,7 +104,7 @@ class Task(models.Model):
                     action=AuditAction.STATUS_CHANGED,
                     old_value=old_row["status"],
                     new_value=self.status,
-                    actor=audit_actor,
+                    actor_id=audit_actor_id,
                 )
             )
         if "name" in tracked and old_row["name"] != self.name:
@@ -110,7 +114,7 @@ class Task(models.Model):
                     action=AuditAction.NAME_CHANGED,
                     old_value=old_row["name"],
                     new_value=self.name,
-                    actor=audit_actor,
+                    actor_id=audit_actor_id,
                 )
             )
         if "priority" in tracked and old_row["priority"] != self.priority:
@@ -120,7 +124,7 @@ class Task(models.Model):
                     action=AuditAction.PRIORITY_CHANGED,
                     old_value=old_row["priority"],
                     new_value=self.priority,
-                    actor=audit_actor,
+                    actor_id=audit_actor_id,
                 )
             )
         if "tags" in tracked and _normalize_tags(
@@ -134,7 +138,7 @@ class Task(models.Model):
                     if isinstance(old_row["tags"], list)
                     else old_row["tags"],
                     new_value=list(self.tags) if isinstance(self.tags, list) else self.tags,
-                    actor=audit_actor,
+                    actor_id=audit_actor_id,
                 )
             )
 
