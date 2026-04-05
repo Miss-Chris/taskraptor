@@ -23,6 +23,7 @@ from agent.schemas import (
     ToolResultMessage,
 )
 from agent.tools import TOOL_DEFINITIONS, execute_tool
+from agent.utils import trim_history_for_context
 
 MAX_ITERATIONS = 10
 RESPOND_TO_USER_TOOL = "respond_to_user"
@@ -42,6 +43,11 @@ def run_agent(
     message, then repeatedly calls the LLM until it calls respond_to_user,
     produces no tool calls, or hits MAX_ITERATIONS.
 
+    Prior history is capped at ``llm_model.context_message_limit`` messages
+    (default 25) before being included in the context.  The system prompt and
+    the new user message are always included regardless of this limit.
+    Trimming preserves valid assistant/tool-call sequences at the boundary.
+
     Returns a pure AgentResult -- no DB writes are performed here.
     Callers are responsible for persisting AgentRun / MessageLog records using
     AgentResult.new_messages, which contains every message emitted in order.
@@ -50,6 +56,8 @@ def run_agent(
     replacement in tests to avoid hitting the network.
     """
     _call = llm_callable if llm_callable is not None else call_llm
+
+    history = trim_history_for_context(history, llm_model.context_message_limit)
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},

@@ -65,3 +65,63 @@ def history_from_message_logs(history: list[MessageLog]) -> list[HistoryMessage]
             )
 
     return messages
+
+
+def _history_prefix_is_valid(history: list[HistoryMessage]) -> bool:
+    """
+    Return True when the first message in ``history`` is a safe starting point
+    for an LLM API call — i.e. no orphaned tool results or incomplete
+    assistant+tool-call blocks at the leading edge.
+
+    Rules checked:
+    - The first message must not be a ToolResultMessage (it would lack a
+      preceding assistant message with a matching tool_call_id).
+    - The first message must not be an AssistantMessage that carries tool_calls
+      without the immediately following ToolResultMessages being present
+      (an assistant message with tool_calls must always be followed by the
+      matching tool result messages before any user or assistant message).
+    """
+    if not history:
+        return True
+
+    first = history[0]
+
+    if isinstance(first, ToolResultMessage):
+        return False
+
+    if isinstance(first, AssistantMessage) and first.tool_calls:
+        expected_ids = {tc.id for tc in first.tool_calls}
+        seen_ids: set[str] = set()
+        for msg in history[1:]:
+            if isinstance(msg, ToolResultMessage):
+                seen_ids.add(msg.tool_call_id)
+            else:
+                break
+        if not expected_ids.issubset(seen_ids):
+            return False
+
+    return True
+
+
+def trim_history_for_context(
+    history: list[HistoryMessage],
+    limit: int,
+) -> list[HistoryMessage]:
+    """
+    Return at most ``limit`` HistoryMessage entries from the tail of ``history``,
+    ensuring the resulting slice starts at a valid API boundary.
+
+    After taking the last ``limit`` messages we drop entries from the front
+    until ``_history_prefix_is_valid`` passes.  In the worst case (e.g. an
+    extremely small limit) we may return an empty list; ``run_agent`` handles
+    that gracefully by relying on the system prompt and new user message alone.
+    """
+    if len(history) <= limit:
+        return history
+
+    trimmed = list(history[-limit:])
+
+    while trimmed and not _history_prefix_is_valid(trimmed):
+        trimmed.pop(0)
+
+    return trimmed

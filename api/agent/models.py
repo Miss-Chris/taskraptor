@@ -86,6 +86,13 @@ class LlmModel(models.Model):
         blank=True,
         help_text="When set, system_free quota is invalid after this time.",
     )
+    context_message_limit = models.PositiveIntegerField(
+        default=25,
+        help_text=(
+            "Maximum number of prior history messages included in each LLM request. "
+            "Lower values reduce cost; higher values improve context quality. Range: 1–1024."
+        ),
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -115,6 +122,10 @@ class LlmModel(models.Model):
         if self.model_key == SYSTEM_FREE_MODEL_KEY and (self.api_key or "").strip():
             raise ValidationError(
                 {"api_key": "Must be empty for system_free (uses server DEEPSEEK_API_KEY)."},
+            )
+        if self.context_message_limit < 1 or self.context_message_limit > 1024:
+            raise ValidationError(
+                {"context_message_limit": "Must be between 1 and 1024."},
             )
 
     @property

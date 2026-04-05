@@ -3,6 +3,15 @@ Live multi-turn benchmark for the channel workflow (token and tool usage).
 
 Server model: deepseek/deepseek-chat (DeepSeek v3 via DEEPSEEK_API_KEY)
 
+Last run (2026-04-05, 20 turns):
+  tasks_in_db_delta:       7  (create_task tool invocations: 8)
+  tool_calls_total:        40
+  input_tokens_total:      214,262
+  output_tokens_total:     3,819
+  tokens_total:            218,081
+  total_wall_seconds:      132.1s
+  avg_seconds_per_turn:    6.6s
+
 Excluded from the default pytest run. To execute:
 
     cd api && uv run pytest -m benchmark -s
