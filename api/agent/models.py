@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import enum
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -20,22 +24,35 @@ class MessageActor(models.TextChoices):
     TOOL_RESULT = "tool_result", "Tool result"
 
 
-class LlmProvider(models.TextChoices):
-    ANTHROPIC = "anthropic", "Anthropic"
-    SYSTEM_FREE = "system_free", "System free"
+class LlmProvider(str, enum.Enum):
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
+    SYSTEM_FREE = "system_free"
 
 
-class LlmModelName(models.TextChoices):
-    """Anthropic model IDs passed to litellm as anthropic/<id>."""
+SUPPORTED_MODEL_KEYS: frozenset[str] = frozenset(
+    {
+        "anthropic/claude-haiku-4-5-20251001",
+        "anthropic/claude-sonnet-4-6",
+        "deepseek/deepseek-chat",  # DeepSeek v3
+        "system_free",  # server-managed DeepSeek key with quota
+    }
+)
 
-    CLAUDE_HAIKU = "claude-haiku-4-5-20251001", "Claude Haiku 4.5"
-    CLAUDE_SONNET = "claude-sonnet-4-6", "Claude Sonnet 4.6"
+SYSTEM_FREE_MODEL_KEY = "system_free"
+SYSTEM_FREE_UNDERLYING_MODEL = "deepseek/deepseek-chat"
 
 
 class LlmModel(models.Model):
     """
-    Per-user LLM configuration: Anthropic (BYO key) or system_free (server key + quota).
-    API keys are stored as plain text; use encryption at rest in production if required.
+    Per-user LLM configuration.
+
+    ``model_key`` is the litellm model identifier, e.g. ``deepseek/deepseek-chat``
+    or the special value ``system_free`` which routes to DeepSeek using the
+    server-managed ``DEEPSEEK_API_KEY`` with a per-user quota.
+
+    API keys are stored as plain text; use encryption at rest in production if
+    required.
     """
 
     user = models.ForeignKey(
@@ -43,11 +60,17 @@ class LlmModel(models.Model):
         on_delete=models.CASCADE,
         related_name="llm_models",
     )
-    provider = models.CharField(max_length=32, choices=LlmProvider.choices)
-    model_name = models.CharField(max_length=128, choices=LlmModelName.choices)
+    model_key = models.CharField(
+        max_length=128,
+        default=SYSTEM_FREE_MODEL_KEY,
+        help_text=(
+            "litellm model key, e.g. 'deepseek/deepseek-chat', or 'system_free' "
+            "to use the server-managed DeepSeek key with quota."
+        ),
+    )
     api_key = models.TextField(
         blank=True,
-        help_text="Anthropic API key; leave empty for system_free (uses SERVER_API_KEY).",
+        help_text="Provider API key; leave empty for system_free (uses DEEPSEEK_API_KEY).",
     )
     quota = models.PositiveIntegerField(
         null=True,
@@ -71,42 +94,28 @@ class LlmModel(models.Model):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "provider"],
-                condition=models.Q(provider=LlmProvider.SYSTEM_FREE),
+                fields=["user", "model_key"],
+                condition=models.Q(model_key=SYSTEM_FREE_MODEL_KEY),
                 name="agent_llmmodel_unique_system_free_per_user",
             ),
         ]
         indexes = [
-            models.Index(fields=["user", "provider"]),
+            models.Index(fields=["user", "model_key"]),
         ]
 
-    def __str__(self):
-        return f"LlmModel({self.pk}, {self.provider}, {self.model_name})"
+    def __str__(self) -> str:
+        return f"LlmModel({self.pk}, {self.model_key})"
 
-    def clean(self):
-        if self.provider == LlmProvider.SYSTEM_FREE:
-            if (self.api_key or "").strip():
-                raise ValidationError(
-                    {"api_key": "Must be empty for system_free provider."},
-                )
-            if self.model_name != LlmModelName.CLAUDE_HAIKU:
-                raise ValidationError(
-                    {
-                        "model_name": "system_free only supports Claude Haiku.",
-                    },
-                )
-        elif self.provider == LlmProvider.ANTHROPIC:
-            if not (self.api_key or "").strip():
-                raise ValidationError(
-                    {"api_key": "Anthropic provider requires an API key."},
-                )
-
-    def save(self, *args, **kwargs):
-        if self.provider == LlmProvider.SYSTEM_FREE:
-            self.model_name = LlmModelName.CLAUDE_HAIKU
-            self.api_key = ""
-        self.full_clean()
-        super().save(*args, **kwargs)
+    def clean(self) -> None:
+        if self.model_key not in SUPPORTED_MODEL_KEYS:
+            raise ValidationError(
+                {"model_key": f"Unsupported model_key {self.model_key!r}. "
+                 f"Supported: {sorted(SUPPORTED_MODEL_KEYS)}"},
+            )
+        if self.model_key == SYSTEM_FREE_MODEL_KEY and (self.api_key or "").strip():
+            raise ValidationError(
+                {"api_key": "Must be empty for system_free (uses server DEEPSEEK_API_KEY)."},
+            )
 
     @property
     def is_quota_exceeded(self) -> bool:
@@ -161,7 +170,7 @@ class AgentRun(models.Model):
             models.Index(fields=["conversation"]),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"AgentRun({self.pk}, {self.status})"
 
 
@@ -217,5 +226,5 @@ class MessageLog(models.Model):
             models.Index(fields=["agent_run", "created_at"]),
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"MessageLog({self.pk}, actor={self.actor})"

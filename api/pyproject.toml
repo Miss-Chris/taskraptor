@@ -23,9 +23,10 @@ DJANGO_SETTINGS_MODULE = "taskraptor.settings.test"
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-m 'not live_api'"
+addopts = "-m 'not live_api and not benchmark'"
 markers = [
     "live_api: marks tests that call the live Anthropic API (deselected by default; run with -m live_api)",
+    "benchmark: multi-turn live API benchmark for token/tool/task metrics (deselected by default; run with -m benchmark)",
 ]
 
 [tool.uv]

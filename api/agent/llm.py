@@ -7,7 +7,7 @@ from django.db.models import F
 from django.utils import timezone
 from litellm import completion
 
-from agent.models import LlmModel, LlmProvider
+from agent.models import LlmModel, LlmProvider, SYSTEM_FREE_MODEL_KEY, SYSTEM_FREE_UNDERLYING_MODEL
 
 
 class QuotaExceededError(Exception):
@@ -23,20 +23,37 @@ class MissingApiKeyError(Exception):
 
 
 def _litellm_model_id(llm_model: LlmModel) -> str:
-    return f"anthropic/{llm_model.model_name}"
+    if llm_model.model_key == SYSTEM_FREE_MODEL_KEY:
+        return SYSTEM_FREE_UNDERLYING_MODEL
+    return llm_model.model_key
 
 
 def _resolve_api_key(llm_model: LlmModel) -> str:
-    if llm_model.provider == LlmProvider.SYSTEM_FREE:
-        key = (getattr(settings, "SERVER_API_KEY", None) or "").strip()
+    if llm_model.model_key == SYSTEM_FREE_MODEL_KEY:
+        key = (getattr(settings, "DEEPSEEK_API_KEY", None) or "").strip()
         if not key:
             raise MissingApiKeyError(
-                "SERVER_API_KEY is not configured for system_free LLM calls.",
+                "DEEPSEEK_API_KEY is not configured for system_free LLM calls.",
             )
         return key
+
+    provider = llm_model.model_key.split("/")[0]
+
+    if provider == LlmProvider.DEEPSEEK:
+        key = (llm_model.api_key or "").strip()
+        if not key:
+            raise MissingApiKeyError("DeepSeek API key is missing on this LlmModel.")
+        return key
+
+    if provider == LlmProvider.ANTHROPIC:
+        key = (llm_model.api_key or "").strip()
+        if not key:
+            raise MissingApiKeyError("Anthropic API key is missing on this LlmModel.")
+        return key
+
     key = (llm_model.api_key or "").strip()
     if not key:
-        raise MissingApiKeyError("Anthropic API key is missing on this LlmModel.")
+        raise MissingApiKeyError(f"API key is missing for provider {provider!r}.")
     return key
 
 
@@ -84,7 +101,7 @@ def call_llm(llm_model: LlmModel, messages: list[dict[str, Any]], **kwargs: Any)
         **kwargs,
     )
 
-    if llm_model.provider == LlmProvider.SYSTEM_FREE:
+    if llm_model.model_key == SYSTEM_FREE_MODEL_KEY:
         delta = _total_tokens_from_response(response)
         LlmModel.objects.filter(pk=llm_model.pk).update(
             quota_used=F("quota_used") + delta,
