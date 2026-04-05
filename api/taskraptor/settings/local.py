@@ -10,6 +10,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "accounts",
+    "tasks",
+    "channels",
 ]
 
 MIDDLEWARE = [
