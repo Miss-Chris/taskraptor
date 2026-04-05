@@ -14,7 +14,7 @@ TaskRaptor is currently a backend-first repository:
 - `api/taskraptor/`: project package, API wiring, and settings modules.
 - `api/taskraptor/settings/local.py`: local development settings.
 - `api/taskraptor/settings/test.py`: pytest settings module.
-- `api/accounts/`, `api/agent/`, `api/channels/`, `api/tasks/`: Django apps.
+- `api/accounts/`, `api/agent/`, `api/automations/`, `api/channels/`, `api/tasks/`: Django apps.
 - `api/*/tests/`: app-level test suites.
 - `api/pyproject.toml`: dependency and pytest config.
 - `api/uv.lock`: locked Python dependencies for `uv`.
@@ -52,7 +52,7 @@ Notes:
 - Keep changes scoped to the Django backend unless the task explicitly involves bootstrapping the frontend.
 - Prefer adding or updating tests in the corresponding app under `api/*/tests/` when changing backend behavior.
 - Avoid editing generated environment artifacts such as `api/.venv/` or `api/.pytest_cache/`.
-- Preserve existing app boundaries: auth in `accounts`, agent logic in `agent`, channel runtime/services in `channels`, task domain models in `tasks`.
+- Preserve existing app boundaries: auth in `accounts`, agent logic in `agent`, channel runtime/services in `channels`, task domain models in `tasks`, scheduled automations in `automations`.
 - If a task needs new setup docs for humans, update `README.md` in addition to this file.
 
 ## Gaps To Notice

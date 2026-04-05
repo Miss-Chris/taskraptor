@@ -11,7 +11,8 @@ import pytest
 
 from agent.models import AgentRun, AgentRunStatus, MessageLog
 from channels.runtime import DummyConversation
-from channels.workflow import handle_user_incoming
+from channels.models import Conversation
+from channels.workflow import handle_system_message, handle_user_incoming
 from tasks.models import Task
 
 from channels.tests.scripted_llm import ScriptedLlm, tool_call_response
@@ -157,3 +158,41 @@ def test_agent_run_marked_failed_on_script_exhausted(
     run = AgentRun.objects.filter(conversation=test_conversation).order_by("-created_at").first()
     assert run is not None
     assert run.status == AgentRunStatus.FAILED
+
+
+@pytest.mark.django_db
+def test_handle_system_message_creates_conversation_and_runs_agent(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+):
+    """
+    System-initiated turn uses the latest-or-new conversation and runs the same
+    agent loop as user messages.
+    """
+    DummyConversation._sent.clear()
+
+    assert Conversation.objects.filter(channel=test_channel).count() == 0
+
+    result = handle_system_message(
+        test_channel,
+        "List my top tasks",
+        llm_callable=ScriptedLlm([
+            tool_call_response("respond_to_user", {"message": "Here are your top tasks."}),
+        ]),
+    )
+
+    assert result.error is None
+    assert result.response_text == "Here are your top tasks."
+
+    convos = Conversation.objects.filter(channel=test_channel)
+    assert convos.count() == 1
+    conversation = convos.first()
+    assert conversation is not None
+
+    run = AgentRun.objects.filter(conversation=conversation).order_by("-created_at").first()
+    assert run is not None
+    assert run.status == AgentRunStatus.COMPLETED
+
+    sent = DummyConversation._sent.get(conversation.pk, [])
+    assert sent == ["Here are your top tasks."]

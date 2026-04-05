@@ -5,6 +5,12 @@ from django.db import models
 
 
 class User(AbstractUser):
+    timezone = models.CharField(
+        max_length=63,
+        default="UTC",
+        help_text="IANA timezone name (e.g. America/New_York) for scheduling automations.",
+    )
+
     class Meta:
         db_table = "auth_user"
 

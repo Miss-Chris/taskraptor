@@ -136,7 +136,11 @@ def handle_user_incoming(
     return result
 
 
-def handle_system_message(channel: Channel, message: str) -> AgentResult:
+def handle_system_message(
+    channel: Channel,
+    message: str,
+    llm_callable: Callable | None = None,
+) -> AgentResult:
     """
     Orchestrate a system-initiated turn (e.g. from a cron job or automation).
 
@@ -144,10 +148,15 @@ def handle_system_message(channel: Channel, message: str) -> AgentResult:
     channel, then delegates to handle_user_incoming. If no conversation exists,
     a new one is created automatically (matching services.get_conversation behaviour).
 
-    Not yet implemented -- this stub is intentionally left unfinished until
-    the system-trigger infrastructure (scheduler, alarm model, etc.) is in place.
+    The prompt is passed through the same agent loop as a user message so the
+    model can respond with tools; scheduling is handled elsewhere.
     """
-    raise NotImplementedError(
-        "handle_system_message is not yet implemented. "
-        "It will resolve the latest Conversation for the Channel and call handle_user_incoming."
+    conversation = (
+        Conversation.objects.filter(channel=channel)
+        .order_by("-updated_at", "-pk")
+        .first()
     )
+    if conversation is None:
+        conversation = Conversation.objects.create(channel=channel)
+
+    return handle_user_incoming(conversation, message, llm_callable=llm_callable)

@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "tasks",
     "channels",
     "agent",
+    "automations",
 ]
 
 MIDDLEWARE = [
