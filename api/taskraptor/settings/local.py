@@ -9,6 +9,7 @@ USER_SESSION_TTL_DAYS = config("USER_SESSION_TTL_DAYS", default=30, cast=int)
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
+TIME_ZONE = "UTC"
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -49,3 +50,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 USE_TZ = True
+
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "dispatch-due-automations-every-minute": {
+        "task": "automations.dispatch_due_automations",
+        "schedule": 60.0,
+    },
+}

@@ -22,6 +22,11 @@ class Automation(models.Model):
         help_text="Time of day in the user's local timezone when this automation runs.",
     )
     is_active = models.BooleanField(default=True)
+    last_run_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Most recent successful run timestamp in UTC.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
