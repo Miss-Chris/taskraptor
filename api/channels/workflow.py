@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Callable
 
@@ -124,7 +123,7 @@ def handle_user_incoming(
         if msg.actor == "tool_call" and msg.tool_name == "respond_to_user":
             text = (msg.arguments or {}).get("message", "")
             if text:
-                runtime_conv.send_message(text)
+                runtime_conv.send_message(text, agent_run=agent_run)
 
     logger.info(
         "[workflow] handle_user_incoming conversation_id=%s agent_run_id=%s status=%s iterations=%s",

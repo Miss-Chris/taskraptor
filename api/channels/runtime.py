@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from channels.models import Channel, ChannelType, Conversation
+from channels.web import record_assistant_message
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,12 @@ class TelegramConversation(BaseConversation):
 
 class WebConversation(BaseConversation):
     def send_message(self, text: str, **kwargs: Any) -> None:
+        agent_run = kwargs.get("agent_run")
+        record_assistant_message(
+            self.conversation,
+            text,
+            agent_run=agent_run,
+        )
         logger.info(
             "[channels][web] channel_id=%s conversation_id=%s text=%r",
             self.channel.pk,
