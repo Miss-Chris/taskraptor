@@ -2,6 +2,9 @@ from decouple import config
 
 SECRET_KEY = config("SECRET_KEY")
 
+# Anthropic API key for platform `system_free` LLM configs (per-user quota on `LlmModel`).
+SERVER_API_KEY = config("SERVER_API_KEY", default="")
+
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
