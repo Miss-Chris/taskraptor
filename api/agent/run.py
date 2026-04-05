@@ -12,7 +12,7 @@ from agent.llm import (
     call_llm,
 )
 from agent.models import LlmModel
-from agent.prompts import SYSTEM_PROMPT
+from agent.prompts import BASE_SYSTEM_PROMPT
 from agent.schemas import (
     AgentResult,
     AssistantMessage,
@@ -34,6 +34,7 @@ def run_agent(
     llm_model: LlmModel,
     history: list[HistoryMessage],
     new_message: str,
+    system_prompt: str | None = None,
     llm_callable: Callable | None = None,
 ) -> AgentResult:
     """
@@ -59,8 +60,10 @@ def run_agent(
 
     history = trim_history_for_context(history, llm_model.context_message_limit)
 
+    resolved_system_prompt = system_prompt or BASE_SYSTEM_PROMPT
+
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": resolved_system_prompt},
         *[m.to_api_dict() for m in history],
         {"role": "user", "content": new_message},
     ]

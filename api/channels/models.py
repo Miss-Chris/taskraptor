@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class WebChatRole(models.TextChoices):
@@ -22,6 +23,7 @@ class Channel(models.Model):
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=32, choices=ChannelType.choices)
     external_id = models.CharField(max_length=255, blank=True)
+    archived_at = models.DateTimeField(null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -33,6 +35,11 @@ class Channel(models.Model):
                 fields=["user", "type"],
                 condition=models.Q(type=ChannelType.WEB),
                 name="channels_channel_unique_web_per_user",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "type"],
+                condition=models.Q(type=ChannelType.TELEGRAM, archived_at__isnull=True),
+                name="channels_channel_unique_active_telegram_per_user",
             ),
         ]
 
@@ -85,3 +92,32 @@ class WebChatMessage(models.Model):
 
     def __str__(self) -> str:
         return f"WebChatMessage({self.pk}, role={self.role})"
+
+
+class TelegramJoinCode(models.Model):
+    """One-time code linking a TaskRaptor user to a Telegram chat."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="telegram_join_codes",
+    )
+    code = models.CharField(max_length=8, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    telegram_chat_id = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"TelegramJoinCode({self.code!r}, user_id={self.user_id})"
+
+    @property
+    def is_expired(self) -> bool:
+        if self.redeemed_at is not None:
+            return False
+        return self.expires_at < timezone.now()

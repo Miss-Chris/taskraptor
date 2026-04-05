@@ -11,6 +11,11 @@ class User(AbstractUser):
         default="UTC",
         help_text="IANA timezone name (e.g. America/New_York) for scheduling automations.",
     )
+    prompt_instructions = models.TextField(
+        blank=True,
+        default="",
+        help_text="Additional standing instructions appended to the assistant system prompt for all of this user's runs.",
+    )
 
     class Meta:
         db_table = "auth_user"

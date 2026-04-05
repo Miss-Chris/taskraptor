@@ -6,6 +6,7 @@ from typing import Callable
 from django.utils import timezone
 
 from agent.models import AgentRun, AgentRunStatus, LlmModel, MessageLog
+from agent.prompts import build_system_prompt
 from agent.run import run_agent
 from agent.schemas import AgentResult
 from agent.utils import history_from_message_logs
@@ -89,11 +90,13 @@ def handle_user_incoming(
     )
 
     try:
+        system_prompt = build_system_prompt(channel.user.prompt_instructions)
         result = run_agent(
             user_id=user_id,
             llm_model=llm_model,
             history=history,
             new_message=message,
+            system_prompt=system_prompt,
             llm_callable=llm_callable,
         )
     except Exception as exc:

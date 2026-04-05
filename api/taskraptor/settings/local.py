@@ -6,6 +6,10 @@ SECRET_KEY = config("SECRET_KEY")
 DEEPSEEK_API_KEY = config("DEEPSEEK_API_KEY", default="")
 USER_SESSION_TTL_DAYS = config("USER_SESSION_TTL_DAYS", default=30, cast=int)
 
+TELEGRAM_BOT_NAME = config("TELEGRAM_BOT_NAME", default="")
+TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
+TELEGRAM_WEBHOOK_BASE_URL = config("TELEGRAM_WEBHOOK_BASE_URL", default="")
+
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]

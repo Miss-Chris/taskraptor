@@ -8,6 +8,7 @@ bookkeeping, and channel delivery all run against the real test database.
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from django.utils import timezone
@@ -19,7 +20,17 @@ from channels.services import get_conversation
 from channels.workflow import handle_system_message, handle_user_incoming
 from tasks.models import Task
 
-from channels.tests.scripted_llm import ScriptedLlm, tool_call_response
+from channels.tests.scripted_llm import ScriptedLlm, text_response, tool_call_response
+
+
+class CapturingTextLlm:
+    def __init__(self, content: str = "Done.") -> None:
+        self.content = content
+        self.calls: list[list[dict[str, Any]]] = []
+
+    def __call__(self, llm_model: Any, messages: Any, **kwargs: Any) -> Any:
+        self.calls.append(list(messages))
+        return text_response(self.content)
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +211,82 @@ def test_handle_system_message_creates_conversation_and_runs_agent(
 
     sent = DummyConversation._sent.get(conversation.pk, [])
     assert sent == ["Here are your top tasks."]
+
+
+@pytest.mark.django_db
+def test_workflow_passes_user_prompt_instructions_into_system_message(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+    test_conversation,
+):
+    test_user.prompt_instructions = "Always include a short next-steps section."
+    test_user.save(update_fields=["prompt_instructions"])
+    test_llm_model_offline.context_message_limit = 2
+    test_llm_model_offline.save(update_fields=["context_message_limit"])
+
+    prior_run = AgentRun.objects.create(
+        channel=test_channel,
+        conversation=test_conversation,
+        user=test_user,
+        llm_model=test_llm_model_offline,
+        status=AgentRunStatus.COMPLETED,
+        started_at=timezone.now(),
+        completed_at=timezone.now(),
+    )
+    MessageLog.objects.create(
+        agent_run=prior_run,
+        conversation=test_conversation,
+        channel=test_channel,
+        actor="user",
+        content="first request",
+    )
+    MessageLog.objects.create(
+        agent_run=prior_run,
+        conversation=test_conversation,
+        channel=test_channel,
+        actor="assistant",
+        content="first reply",
+    )
+    MessageLog.objects.create(
+        agent_run=prior_run,
+        conversation=test_conversation,
+        channel=test_channel,
+        actor="user",
+        content="second request",
+    )
+    MessageLog.objects.create(
+        agent_run=prior_run,
+        conversation=test_conversation,
+        channel=test_channel,
+        actor="assistant",
+        content="second reply",
+    )
+
+    scripted = CapturingTextLlm()
+
+    result = handle_user_incoming(
+        test_conversation,
+        "latest request",
+        llm_callable=scripted,
+    )
+
+    assert result.error is None
+    assert scripted.calls, "Expected the LLM callable to be invoked"
+
+    first_call_messages = scripted.calls[0]
+    assert first_call_messages[0]["role"] == "system"
+    assert "## User-Specific Standing Instructions" in first_call_messages[0]["content"]
+    assert "Always include a short next-steps section." in first_call_messages[0]["content"]
+
+    non_system_messages = first_call_messages[1:]
+    assert len(non_system_messages) == 3
+    assert non_system_messages[0]["role"] == "user"
+    assert non_system_messages[0]["content"] == "second request"
+    assert non_system_messages[1]["role"] == "assistant"
+    assert non_system_messages[1]["content"] == "second reply"
+    assert non_system_messages[2]["role"] == "user"
+    assert non_system_messages[2]["content"] == "latest request"
 
 
 @pytest.mark.django_db

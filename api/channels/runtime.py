@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from channels.models import Channel, ChannelType, Conversation
+from channels.telegram import send_telegram_message
 from channels.web import record_assistant_message
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,20 @@ class BaseConversation(ABC):
 
 class TelegramConversation(BaseConversation):
     def send_message(self, text: str, **kwargs: Any) -> None:
+        chat_id = (self.channel.external_id or "").strip()
+        if chat_id:
+            try:
+                send_telegram_message(chat_id, text)
+            except Exception:
+                logger.exception(
+                    "[channels][telegram] send_telegram_message failed channel_id=%s",
+                    self.channel.pk,
+                )
+        else:
+            logger.warning(
+                "[channels][telegram] missing external_id channel_id=%s",
+                self.channel.pk,
+            )
         logger.info(
             "[channels][telegram] channel_id=%s conversation_id=%s text=%r",
             self.channel.pk,
