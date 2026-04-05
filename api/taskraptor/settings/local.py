@@ -12,6 +12,7 @@ INSTALLED_APPS = [
     "accounts",
     "tasks",
     "channels",
+    "agent",
 ]
 
 MIDDLEWARE = [
