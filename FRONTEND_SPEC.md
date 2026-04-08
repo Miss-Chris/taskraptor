@@ -1,73 +1,207 @@
 # TaskRaptor Frontend Webapp Spec
 
-## Current State
+## Purpose
 
-The backend has a solid "core":
+Build the first committed web frontend for TaskRaptor as a React SPA that talks to the existing Django Ninja backend.
 
-- **Models:** User, Task (with tags as JSONField), Conversation, Channel, WebChatMessage, AgentRun, MessageLog, LlmModel, Automation, TelegramJoinCode
-- **Agent loop:** LiteLLM-based agent with tools (create/edit/delete task, run\_sql, respond\_to\_user)
-- **Web chat service layer:** `channels/web.py` has `handle_web_user_message`, `get_chat_history`, conversation CRUD -- but no HTTP endpoints
-- **Existing API:** Only `/api/auth/{register,login,me}` and `/api/telegram/{webhook,reset-webhook}`
-- **Frontend:** Empty directory, no framework or files
+This document is intentionally implementation-oriented. It keeps the original product shape, tightens a few assumptions against the current backend, and turns delivery into a checklist.
 
 ---
 
-## Tech Stack
+## Reviewed Scope
 
-- **React 19 + Vite** (SPA) -- simplest approach given separate Django API
-- **React Router** for client-side routing
-- **shadcn/ui + Tailwind CSS** for all components
-- **Sidebar layout** from shadcn's sidebar component
+### Confirmed Current Backend State
+
+- Auth endpoints already exist at `/api/auth/register`, `/api/auth/login`, and `/api/auth/me`.
+- Telegram webhook/reset endpoints already exist at `/api/telegram/webhook` and `/api/telegram/reset-webhook`.
+- Web chat domain models and service helpers already exist:
+  - `Channel`, `Conversation`, `WebChatMessage`
+  - `get_or_create_default_web_channel`
+  - `create_web_conversation`
+  - `record_user_message`
+  - `get_chat_history`
+  - `handle_web_user_message`
+- Task, automation, user settings, and LLM configuration models already exist.
+- The `frontend/` directory exists but has no committed app yet.
+
+### Review Notes And Spec Adjustments
+
+- Use a Vite dev proxy first instead of requiring backend CORS work for local development.
+  - Reason: the backend does not currently include `django-cors-headers`, and a dev proxy is the lighter MVP path.
+  - CORS can still be added later if the frontend and backend must run on separate origins outside local dev.
+- Treat `/api/auth/me` as identity-only.
+  - It currently returns user identity fields, not `timezone` or `prompt_instructions`.
+  - The settings page therefore still needs a dedicated `/api/settings` endpoint.
+- Keep API key selection aligned to supported backend model keys.
+  - The backend currently supports `system_free`, `deepseek/deepseek-chat`, `anthropic/claude-haiku-4-5-20251001`, and `anthropic/claude-sonnet-4-6`.
+  - The frontend should not present arbitrary providers or model strings.
+- Prefer polling for chat over sockets/SSE for MVP.
+  - This matches the existing Telegram enqueue-and-process architecture.
+  - It keeps the first web chat implementation operational without introducing streaming infrastructure.
+- Keep tags derived from `Task.tags`.
+  - No separate tag entity or tag CRUD is needed.
 
 ---
 
-## Architecture
+## Product Goals
 
-```
+- Let a user register, log in, and stay authenticated in the browser.
+- Let a user create conversations and chat with the agent from the web app.
+- Let a user browse and update tasks created by the agent.
+- Let a user manage scheduled automations.
+- Let a user connect Telegram from the web UI.
+- Let a user view usage limits and optionally switch to their own API key.
+- Let a user edit account-level settings relevant to automations and prompting.
+
+Non-goals for MVP:
+
+- WebSockets or token-streaming chat
+- Multi-user collaboration
+- Rich task editing forms beyond inline status and lightweight field updates
+- Telegram disconnect flow beyond placeholder UX
+- Advanced search, sorting, or analytics
+
+---
+
+## Recommended Tech Stack
+
+- React 19
+- Vite
+- React Router
+- Tailwind CSS
+- shadcn/ui
+- TanStack Query for API fetching, cache invalidation, polling, and mutation state
+- `react-hook-form` plus `zod` for forms with lightweight validation
+- `marked` or `react-markdown` for assistant message rendering
+
+Notes:
+
+- TanStack Query is worth adding here because the UI has repeated server state concerns: auth hydration, sidebar conversation lists, task filters, polling, and mutation-driven refreshes.
+- Use a Vite `/api` proxy in development so the SPA can call the Django app without local CORS setup.
+
+---
+
+## Frontend Architecture
+
+```text
 React SPA (Vite)
-    |
-    |-- Bearer token -->  Django Ninja API (/api/*)
-    |                         |
-    |                         |-- enqueue --> Celery Worker
-    |                         |                   |
-    |                         |                   --> Agent Loop (LiteLLM)
-    |                         |                         |
-    |                         |                         --> Task CRUD + SQL --> PostgreSQL
-    |                         |
-    |                         --> PostgreSQL
-    |
-    |-- poll every 3s --> Django Ninja API
+  |
+  |-- /api/* via dev proxy or same-origin deploy
+  |
+  |-- auth token in localStorage
+  |
+  |-- TanStack Query for fetch/mutate/poll
+  |
+  |-- route tree
+      |-- /login
+      |-- /register
+      |-- /
+      |-- /c/:id
+      |-- /tasks
+      |-- /tasks/upcoming
+      |-- /automations
+      |-- /settings
 ```
 
-### Chat Flow (Polling)
+Suggested frontend structure:
 
-1. **User sends message:** `POST /api/conversations/{id}/messages` records the `WebChatMessage`, enqueues a Celery task (`process_web_message`), returns immediately with `{ "message_id": int, "status": "processing" }`.
-2. **Celery worker:** Runs the agent loop (same as Telegram path), persists assistant `WebChatMessage` rows via `WebConversation.send_message`.
-3. **Frontend polls:** After sending, the frontend polls `GET /api/conversations/{id}/messages?after_id={last_seen_id}` every 3 seconds for up to 60 seconds. New assistant messages appear as they are persisted.
-4. **Polling stops:** When the poll returns a message with `role=assistant` and no new messages arrive for a full poll cycle, or after 60 seconds, whichever comes first.
-
-This mirrors the existing Telegram flow (webhook -> Celery task -> agent -> send reply) and avoids long-lived HTTP connections.
+- `frontend/src/app/`
+  - app shell, router, providers
+- `frontend/src/features/auth/`
+  - auth pages, auth provider, token utilities
+- `frontend/src/features/chat/`
+  - chat routes, polling hook, message list, composer
+- `frontend/src/features/tasks/`
+  - task list views, filters, patch mutations
+- `frontend/src/features/automations/`
+  - automation list and form
+- `frontend/src/features/settings/`
+  - settings page, usage modal, API key modal
+- `frontend/src/features/telegram/`
+  - telegram status badge and join-code modal
+- `frontend/src/lib/api.ts`
+  - shared request wrapper, auth header injection, 401 handling
 
 ---
 
-## Backend API Endpoints
+## UX Requirements
 
-All endpoints below need to be added. Auth uses existing `AuthBearer` from `accounts/bearer.py`. Response shapes use Django Ninja `Schema`.
+### Auth
 
-### Conversations (`/api/conversations`)
+- Login and register are separate routes.
+- On success, store the bearer token in `localStorage`.
+- On app boot, hydrate auth state from `localStorage`.
+- If a protected API call returns `401`, clear the token and redirect to `/login`.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/conversations` | List user's conversations (web channel only), ordered by `updated_at` desc. Query param: `limit` (default 20). |
-| POST | `/api/conversations` | Create a new web conversation. Optional `title` in body. Returns the conversation object. |
-| GET | `/api/conversations/{id}/messages` | Paginated chat history. Query params: `limit` (default 50), `before_id` (cursor for older messages), `after_id` (cursor for newer messages -- used by polling). Uses existing `get_chat_history` (extended with `after_id`). |
-| POST | `/api/conversations/{id}/messages` | Send a user message. Body: `{ "content": str }`. Records `WebChatMessage`, enqueues `process_web_message` Celery task, returns immediately with `{ "message_id": int, "status": "processing" }`. |
+### App Shell
 
-Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after_id` support), `record_user_message`, `create_web_conversation`. New Celery task `process_web_message` in `channels/tasks.py` calls `handle_user_incoming`.
+- Use a persistent left sidebar and a main content pane.
+- Sidebar should be usable on desktop and collapse cleanly on smaller screens.
+- Primary navigation belongs in the sidebar, not in scattered page headers.
 
-#### Response Schemas
+### Chat
 
-**ConversationOut:**
+- The chat view is the default signed-in landing experience.
+- If no conversation is selected, show an empty state with a clear `New Chat` action.
+- User messages are visually distinct from assistant messages.
+- Assistant content supports basic markdown rendering.
+- After sending a message, the UI shows a pending/thinking state until polling settles.
+
+### Tasks
+
+- Tasks should be scannable first and editable second.
+- Inline status updates should feel immediate.
+- Filtering by status, tag, and simple search should work together.
+
+### Automations
+
+- Automation management is lightweight: list, create, edit, activate/deactivate, delete.
+- Times should be shown in the user's configured timezone.
+
+### Telegram And Usage
+
+- Telegram connection state should be visible without leaving the main layout.
+- Usage state should also be visible from the sidebar or a nearby persistent control.
+- API key management should explain the effect of switching off `system_free`.
+
+---
+
+## Backend API Checklist
+
+All new endpoints should use Django Ninja schemas and existing `AuthBearer`.
+
+### Conversations: `/api/conversations`
+
+- [ ] `GET /api/conversations`
+  - Returns the authenticated user's web conversations only.
+  - Ordered by `updated_at desc`.
+  - Supports `limit` with a sensible default of `20`.
+- [ ] `POST /api/conversations`
+  - Creates a conversation on the user's default web channel.
+  - Accepts optional `title`.
+  - Returns the created conversation.
+- [ ] `GET /api/conversations/{id}/messages`
+  - Returns chat history ordered oldest to newest.
+  - Supports `limit`.
+  - Supports `before_id` for older-history pagination.
+  - Supports `after_id` for polling new messages.
+- [ ] `POST /api/conversations/{id}/messages`
+  - Accepts `{ "content": string }`.
+  - Persists the user message.
+  - Enqueues a Celery task for processing.
+  - Returns immediately with `{ "message_id": int, "status": "processing" }`.
+- [ ] Add a Celery task for web chat processing in `api/channels/tasks.py`.
+- [ ] Add tests for:
+  - auth enforcement
+  - conversation ownership checks
+  - `after_id` polling behavior
+  - task enqueue behavior
+  - immediate response shape
+
+Response shape targets:
+
+**ConversationOut**
+
 ```json
 {
   "id": 1,
@@ -77,17 +211,19 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-**MessageOut:**
+**MessageOut**
+
 ```json
 {
   "id": 1,
-  "role": "user | assistant",
+  "role": "user",
   "content": "Hello!",
   "created_at": "2026-04-08T12:00:00Z"
 }
 ```
 
-**SendMessageOut:**
+**SendMessageOut**
+
 ```json
 {
   "message_id": 42,
@@ -95,18 +231,29 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-### Tasks (`/api/tasks`)
+### Tasks: `/api/tasks`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/tasks` | List tasks (non-deleted). Query params: `status`, `tag`, `search` (name contains), `limit`, `offset`. |
-| GET | `/api/tasks/upcoming` | Tasks with `due_at` in the future, ordered by `due_at` asc. Limit 20. |
-| GET | `/api/tasks/tags` | Distinct tags across user's tasks (extracted from JSONField). Returns `string[]`. |
-| PATCH | `/api/tasks/{id}` | Update task fields (status, name, priority, tags, due\_at). Uses existing `update_task` from `tasks/services.py`. |
+- [ ] `GET /api/tasks`
+  - Returns non-deleted tasks.
+  - Supports `status`, `tag`, `search`, `limit`, and `offset`.
+- [ ] `GET /api/tasks/upcoming`
+  - Returns tasks with future `due_at`.
+  - Ordered by `due_at asc`.
+  - Default limit `20`.
+- [ ] `GET /api/tasks/tags`
+  - Returns distinct tag strings across the authenticated user's tasks.
+- [ ] `PATCH /api/tasks/{id}`
+  - Supports updates to `status`, `name`, `priority`, `tags`, and `due_at`.
+  - Uses existing `update_task`.
+- [ ] Add tests for:
+  - ownership filtering
+  - deleted-task exclusion
+  - status/tag/search filters
+  - task patch validation
+  - `completed_at` behavior when status changes
 
-#### Response Schemas
+**TaskOut**
 
-**TaskOut:**
 ```json
 {
   "id": 1,
@@ -122,18 +269,25 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-### Automations (`/api/automations`)
+### Automations: `/api/automations`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/automations` | List user's automations with channel info. |
-| POST | `/api/automations` | Create automation. Body: `{ prompt, schedule_time, channel_id? }`. Defaults to web channel. |
-| PATCH | `/api/automations/{id}` | Update automation (prompt, schedule\_time, is\_active). |
-| DELETE | `/api/automations/{id}` | Delete automation. |
+- [ ] `GET /api/automations`
+  - Returns the authenticated user's automations.
+  - Includes enough channel data to label where the automation runs.
+- [ ] `POST /api/automations`
+  - Accepts `{ prompt, schedule_time, channel_id? }`.
+  - Defaults to the web channel when `channel_id` is omitted.
+- [ ] `PATCH /api/automations/{id}`
+  - Supports `prompt`, `schedule_time`, `is_active`, and optional `channel_id`.
+- [ ] `DELETE /api/automations/{id}`
+  - Deletes the automation.
+- [ ] Add tests for:
+  - default web-channel behavior
+  - ownership enforcement
+  - update and delete flows
 
-#### Response Schemas
+**AutomationOut**
 
-**AutomationOut:**
 ```json
 {
   "id": 1,
@@ -145,16 +299,22 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-### Telegram (`/api/telegram`) -- extend existing router
+### Telegram: extend `/api/telegram`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/telegram/status` | Returns `{ connected: bool, bot_name: str }`. Checks if user has an active (non-archived) Telegram channel. |
-| POST | `/api/telegram/join-code` | Generate a new `TelegramJoinCode`. Returns `{ code, expires_at, bot_name }`. |
+- [ ] `GET /api/telegram/status`
+  - Returns whether the user has an active, non-archived Telegram channel.
+  - Includes `bot_name`.
+- [ ] `POST /api/telegram/join-code`
+  - Generates a fresh join code.
+  - Invalidates previous unredeemed codes.
+  - Returns `code`, `expires_at`, and `bot_name`.
+- [ ] Add tests for:
+  - connected/not-connected cases
+  - join code generation
+  - auth enforcement
 
-#### Response Schemas
+**TelegramStatusOut**
 
-**TelegramStatusOut:**
 ```json
 {
   "connected": true,
@@ -162,7 +322,8 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-**JoinCodeOut:**
+**JoinCodeOut**
+
 ```json
 {
   "code": "AB12CD",
@@ -171,27 +332,27 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 }
 ```
 
-### Settings and Usage (`/api/settings`)
+### Settings And Usage: `/api/settings`
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/settings` | Returns user settings: `timezone`, `prompt_instructions`. |
-| PATCH | `/api/settings` | Update `timezone` and/or `prompt_instructions`. |
-| GET | `/api/settings/usage` | Returns LLM usage from user's active `LlmModel`. |
-| POST | `/api/settings/api-key` | Set user's own API key. Body: `{ model_key, api_key }`. Creates/updates `LlmModel`. Removes quota limits. |
-| DELETE | `/api/settings/api-key` | Remove own API key, revert to system\_free model. |
+- [ ] `GET /api/settings`
+  - Returns `timezone` and `prompt_instructions`.
+- [ ] `PATCH /api/settings`
+  - Updates `timezone` and/or `prompt_instructions`.
+- [ ] `GET /api/settings/usage`
+  - Returns usage and model state from the user's active `LlmModel`.
+- [ ] `POST /api/settings/api-key`
+  - Accepts a supported `model_key` plus `api_key`.
+  - Creates or updates the user's active non-system model config.
+- [ ] `DELETE /api/settings/api-key`
+  - Removes the user's own key-backed config and returns them to `system_free`.
+- [ ] Add tests for:
+  - settings reads/writes
+  - invalid timezone or model key handling
+  - own-key activation
+  - revert-to-system-free flow
 
-#### Response Schemas
+Recommended usage response:
 
-**SettingsOut:**
-```json
-{
-  "timezone": "America/New_York",
-  "prompt_instructions": "Be concise."
-}
-```
-
-**UsageOut:**
 ```json
 {
   "model_key": "system_free",
@@ -204,131 +365,242 @@ Leverages existing code in `channels/web.py` -- `get_chat_history` (needs `after
 
 ---
 
-## Frontend Screens
+## Frontend Screen Checklist
 
-### 1. Auth Pages (`/login`, `/register`)
+### 1. Auth Pages: `/login`, `/register`
 
-- Simple centered card with username/password (and email for register)
-- On success, store token in localStorage, redirect to `/`
-- No complex flows -- matches existing `RegisterIn` / `LoginIn` schemas
+- [ ] Build login page with username and password.
+- [ ] Build register page with username, email, and password.
+- [ ] Handle success by saving token and redirecting to `/`.
+- [ ] Show inline API errors for invalid credentials or duplicate username.
+- [ ] Prevent authenticated users from revisiting auth pages unnecessarily.
 
-### 2. App Shell (Layout)
+Acceptance criteria:
 
-- **shadcn Sidebar** (collapsible) on the left + main content area
-- Sidebar sections (top to bottom):
-  - **"New Chat" button** -- creates conversation, navigates to it
-  - **Recent Conversations** -- last 5, clicking navigates to `/c/{id}`
-  - **Divider**
-  - **All Tasks** link -> `/tasks`
-  - **Upcoming Tasks** link -> `/tasks/upcoming`
-  - **Tags** section -- show up to 8 tags as badges/chips, clicking filters tasks view
-  - **Automations** link -> `/automations`
-  - **Divider**
-  - **Telegram indicator** -- "Connect Telegram" or "Telegram Connected" badge. Clicking opens a modal with join code + instructions
-  - **Usage counter** -- "X / Y messages used" with a small "Remove limits" button that opens API key modal
-  - **Divider**
-  - **Settings** link -> `/settings` (gear icon)
+- A new user can register and land in the app.
+- An existing user can log in and refresh the browser without losing the session.
 
-### 3. Chat View (`/`, `/c/{id}`)
+### 2. App Shell
 
-- Default route. If no conversation selected, show a welcome/empty state with "New Chat" prompt.
-- Message list: user messages right-aligned, assistant messages left-aligned, rendered with markdown support.
-- Input bar at the bottom with send button.
-- After sending a message, show a "thinking" indicator while polling for the agent's response (poll `GET /conversations/{id}/messages?after_id={last_msg_id}` every 3s, up to 60s).
-- New assistant messages appear incrementally as the agent produces them.
-- Conversation title in the header area.
+- [ ] Add a left sidebar using shadcn patterns.
+- [ ] Add responsive collapse behavior for smaller screens.
+- [ ] Add primary nav items:
+  - [ ] `New Chat`
+  - [ ] recent conversations
+  - [ ] `All Tasks`
+  - [ ] `Upcoming Tasks`
+  - [ ] tag shortcuts
+  - [ ] `Automations`
+  - [ ] Telegram status trigger
+  - [ ] usage/API key trigger
+  - [ ] `Settings`
+- [ ] Load recent conversations and tags once authenticated.
+- [ ] Keep shell visible while page content changes.
 
-### 4. All Tasks View (`/tasks`)
+Acceptance criteria:
 
-- Table/list of tasks with columns: name, status (badge), priority, due date, tags (badges)
-- Inline status toggle (pending -> in\_progress -> completed)
-- Filter bar: by status, by tag (from sidebar click or dropdown)
-- Simple search by name
-- Empty state when no tasks
+- The signed-in app feels like one persistent product shell rather than disconnected pages.
 
-### 5. Upcoming Tasks View (`/tasks/upcoming`)
+### 3. Chat View: `/`, `/c/:id`
 
-- Similar to All Tasks but pre-filtered to tasks with future `due_at`
-- Sorted by due date ascending
-- Grouped by day (Today, Tomorrow, This Week, Later)
+- [ ] Add empty-state chat landing view.
+- [ ] Add conversation route with header and title.
+- [ ] Render message history oldest to newest.
+- [ ] Render user messages right-aligned and assistant messages left-aligned.
+- [ ] Support markdown in assistant messages.
+- [ ] Add composer with disabled/loading state during sends.
+- [ ] On send:
+  - [ ] optimistically add the user message
+  - [ ] call `POST /api/conversations/{id}/messages`
+  - [ ] start polling `GET /api/conversations/{id}/messages?after_id=...`
+- [ ] Poll every 3 seconds for up to 60 seconds.
+- [ ] Stop polling when:
+  - [ ] no new messages arrive for one full cycle after at least one assistant message was received, or
+  - [ ] the 60-second timeout is reached
+- [ ] Show failure state if the send or polling request fails.
 
-### 6. Automations View (`/automations`)
+Acceptance criteria:
 
-- List of automations: prompt (truncated), schedule time, active toggle
-- "Add Automation" button opens a simple form (prompt textarea, time picker, active toggle)
-- Edit/delete actions per row
+- A user can start a conversation, send a message, and see the assistant reply arrive without a full page reload.
 
-### 7. Settings View (`/settings`)
+### 4. All Tasks View: `/tasks`
 
-- User info (read-only: username, email)
-- Timezone selector
-- Custom prompt instructions textarea
-- API Key section: current model, add/remove own key
-- Danger zone: (placeholder for future account actions)
+- [ ] Render a list or table with:
+  - [ ] name
+  - [ ] status
+  - [ ] priority
+  - [ ] due date
+  - [ ] tags
+- [ ] Add status filter.
+- [ ] Add tag filter.
+- [ ] Add name search.
+- [ ] Add inline status mutation.
+- [ ] Add loading, empty, and error states.
+
+Acceptance criteria:
+
+- Task data is discoverable and status changes are reflected immediately in the UI.
+
+### 5. Upcoming Tasks View: `/tasks/upcoming`
+
+- [ ] Reuse task presentation from the all-tasks view.
+- [ ] Sort by due date ascending.
+- [ ] Group tasks into:
+  - [ ] Today
+  - [ ] Tomorrow
+  - [ ] This Week
+  - [ ] Later
+
+Acceptance criteria:
+
+- The user can scan near-term work faster than in the generic task list.
+
+### 6. Automations View: `/automations`
+
+- [ ] Render automation list with prompt, schedule time, and active state.
+- [ ] Add `Add Automation` action.
+- [ ] Add create form with prompt, time, and active toggle.
+- [ ] Add edit action.
+- [ ] Add delete action.
+- [ ] Reflect timezone context in displayed schedule times.
+
+Acceptance criteria:
+
+- A user can create, edit, enable/disable, and delete an automation from the web app.
+
+### 7. Settings View: `/settings`
+
+- [ ] Show identity summary from `/api/auth/me`.
+- [ ] Show editable timezone.
+- [ ] Show editable prompt instructions.
+- [ ] Save settings changes with clear success/error state.
+- [ ] Include API key section or entry point to API key modal.
+- [ ] Leave room for future account actions without overbuilding the page now.
+
+Acceptance criteria:
+
+- A user can update timezone and standing prompt instructions without leaving the app shell.
 
 ### 8. Telegram Connect Modal
 
-- Triggered from sidebar indicator
-- If not connected: shows "Generate Code" button, then displays the 6-char code with instructions ("Open Telegram, find @BotName, send `JOIN CODE`")
-- If connected: shows "Telegram Connected" status with option to disconnect (future)
+- [ ] Show current Telegram connection status.
+- [ ] If not connected:
+  - [ ] allow join-code generation
+  - [ ] show code
+  - [ ] show bot name
+  - [ ] show concise instructions
+- [ ] If connected:
+  - [ ] show connected state
+  - [ ] note that disconnect is future work unless backend support is added now
 
-### 9. API Key / Usage Modal
+Acceptance criteria:
 
-- Shows current usage (quota\_used / quota)
-- "Use your own API key" form: select model provider (Anthropic, DeepSeek), paste key
-- Explanation that own key removes message limits
+- A user can generate a valid join code and understand how to complete the flow in Telegram.
 
----
+### 9. Usage And API Key Modal
 
-## Implementation Order
+- [ ] Show current `model_key`, `quota`, `quota_used`, and expiry if present.
+- [ ] Show whether the user is on `system_free` or a personal API key.
+- [ ] Offer only supported backend model keys.
+- [ ] Let the user submit a new key-backed config.
+- [ ] Let the user remove their own key and revert to `system_free`.
 
-Each phase delivers a working increment. Backend endpoints are built alongside the screens that need them.
+Acceptance criteria:
 
-### Phase 1: Scaffold + Auth
-
-- Vite + React + React Router + Tailwind + shadcn/ui setup in `frontend/`
-- Auth pages (login, register)
-- Auth context/provider with token management
-- Protected route wrapper
-- **Backend:** No changes (existing auth endpoints suffice)
-
-### Phase 2: App Shell + Chat (core experience)
-
-- Sidebar layout with shadcn sidebar
-- Chat view: message list, input bar, polling-based loading state
-- Recent conversations in sidebar (last 5)
-- New conversation button
-- **Backend:** Add `conversations` router with all 4 endpoints. Add `process_web_message` Celery task. Extend `get_chat_history` with `after_id` support. Configure CORS.
-
-### Phase 3: Tasks Views
-
-- All Tasks list view with status badges, filters
-- Upcoming Tasks view
-- Tags section in sidebar
-- **Backend:** Add `tasks` router (`GET /tasks`, `GET /tasks/upcoming`, `GET /tasks/tags`, `PATCH /tasks/{id}`)
-
-### Phase 4: Telegram + Usage
-
-- Telegram status indicator in sidebar
-- Telegram connect modal with join code flow
-- Usage counter in sidebar
-- API key modal
-- **Backend:** Add `GET /telegram/status`, `POST /telegram/join-code`, `GET /settings/usage`, `POST /settings/api-key`, `DELETE /settings/api-key`
-
-### Phase 5: Automations + Settings
-
-- Automations list + CRUD view
-- Settings page
-- **Backend:** Add `automations` router, `GET /settings`, `PATCH /settings`
+- A user can understand their current quota state and switch between system and personal key usage.
 
 ---
 
-## Key Decisions
+## Delivery Plan Checklist
 
-- **Async chat via Celery + polling:** `POST /conversations/{id}/messages` returns immediately after recording the user message and enqueuing the agent work. The frontend polls for new messages every 3 seconds for up to 60 seconds. This mirrors the existing Telegram architecture and avoids blocking HTTP connections.
-- **New Celery task:** `process_web_message(conversation_id, message_text, user_id)` in `channels/tasks.py`. Calls `handle_user_incoming` (same function Telegram uses). Agent replies are persisted as `WebChatMessage` rows by `WebConversation.send_message` during the agent run.
-- **Polling endpoint:** `GET /conversations/{id}/messages?after_id=X` returns messages with `id > X`, used by the polling loop to fetch only new messages.
-- **Tags are derived, not a separate entity:** Tags come from the `Task.tags` JSONField. The `/tasks/tags` endpoint extracts distinct values. No Tag CRUD needed.
-- **Web channel is auto-created:** On first conversation creation, `get_or_create_default_web_channel` handles it transparently.
-- **No WebSocket for MVP:** Polling is sufficient. Real-time features (SSE streaming, live typing indicators) are post-MVP.
-- **CORS:** Django backend will need `django-cors-headers` configured for the Vite dev server origin.
+### Phase 1: Frontend Scaffold And Auth
+
+- [ ] Initialize Vite React app in `frontend/`.
+- [ ] Add Tailwind and shadcn/ui.
+- [ ] Add React Router.
+- [ ] Add TanStack Query.
+- [ ] Add auth provider and token storage.
+- [ ] Add login/register routes.
+- [ ] Add protected-route handling.
+- [ ] Configure Vite dev proxy for `/api`.
+
+Phase exit criteria:
+
+- A user can register, log in, refresh, and remain authenticated.
+
+### Phase 2: Chat And App Shell
+
+- [ ] Build the persistent shell and sidebar.
+- [ ] Implement conversation list and new-conversation flow.
+- [ ] Implement chat route and message rendering.
+- [ ] Implement polling flow.
+- [ ] Add backend conversation router and web-message Celery task.
+- [ ] Add backend tests for the new conversation endpoints.
+
+Phase exit criteria:
+
+- Chat works end to end from the browser against the Django backend.
+
+### Phase 3: Task Surfaces
+
+- [ ] Implement all-tasks page.
+- [ ] Implement upcoming-tasks page.
+- [ ] Implement sidebar tag shortcuts.
+- [ ] Add backend task endpoints and tests.
+
+Phase exit criteria:
+
+- The user can browse and update tasks from the web app.
+
+### Phase 4: Telegram And Usage
+
+- [ ] Implement Telegram status badge and modal.
+- [ ] Implement usage/API key modal.
+- [ ] Add backend Telegram status/join-code endpoints and tests.
+- [ ] Add backend usage/API-key endpoints and tests.
+
+Phase exit criteria:
+
+- The user can connect Telegram and manage usage/key state from the app.
+
+### Phase 5: Automations And Settings
+
+- [ ] Implement automations CRUD UI.
+- [ ] Implement settings page.
+- [ ] Add backend automations router and tests.
+- [ ] Add backend settings endpoints and tests.
+
+Phase exit criteria:
+
+- The web app covers the primary product surfaces already present in the backend domain model.
+
+---
+
+## Cross-Cutting Implementation Checklist
+
+- [ ] Use one shared API client with bearer-token injection.
+- [ ] Normalize backend errors into user-readable UI messages.
+- [ ] Add loading and empty states on every route.
+- [ ] Guard every endpoint by authenticated ownership on the backend.
+- [ ] Add route-level skeletons or placeholders to reduce layout shift.
+- [ ] Keep task and automation times timezone-aware in the UI.
+- [ ] Ensure the shell works on mobile widths.
+- [ ] Add a basic 404 route.
+- [ ] Add frontend lint/format tooling as part of the scaffold.
+- [ ] Add backend tests for every new router.
+- [ ] Add frontend smoke coverage if test tooling is introduced during scaffold.
+
+---
+
+## Open Decisions
+
+- [ ] Decide whether the frontend ships as a separate deployable SPA or is eventually served by Django in production.
+- [ ] Decide whether conversation titles are user-provided only or later auto-generated from first message content.
+- [ ] Decide whether API key entry should live only in a modal or also on the settings page.
+- [ ] Decide whether task editing beyond status should be inline, modal-based, or deferred.
+- [ ] Decide whether Telegram disconnect should be backend-backed in MVP or explicitly deferred.
+
+Current recommendation:
+
+- Separate SPA during development, same-origin deployment later if operational simplicity matters.
+
