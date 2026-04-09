@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -35,39 +33,29 @@ export function HomePage() {
     }
   }, [navigate])
 
-  function handleLogout() {
-    clearToken()
-    navigate("/login", { replace: true })
-  }
-
   if (loading) {
     return (
-      <div className="flex min-h-svh items-center justify-center p-6">
+      <div className="flex flex-1 items-center justify-center py-12">
         <p className="text-muted-foreground text-sm">Loading…</p>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center p-6">
-      <Card className="w-full max-w-md">
+    <div className="mx-auto w-full max-w-lg">
+      <Card>
         <CardHeader>
-          <CardTitle>Welcome</CardTitle>
+          <CardTitle>Home</CardTitle>
           <CardDescription>
             Signed in as <span className="text-foreground font-medium">{me?.email}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="text-muted-foreground text-sm leading-relaxed">
-          <p>You&apos;re connected to TaskRaptor. Build out your dashboard here.</p>
+          <p>Placeholder home. Chat, tasks, and more will show up here.</p>
           <p className="mt-2 font-mono text-xs">
             (Press <kbd className="rounded border px-1">d</kbd> to toggle dark mode)
           </p>
         </CardContent>
-        <CardFooter>
-          <Button type="button" variant="outline" onClick={handleLogout}>
-            Log out
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )
