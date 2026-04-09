@@ -28,7 +28,6 @@ def test_api_key():
 @pytest.fixture
 def test_user(db):
     return User.objects.create_user(
-        username="workflow_test_user",
         email="workflow_test@example.com",
         password="testpass123",
     )

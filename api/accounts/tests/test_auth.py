@@ -20,7 +20,7 @@ def client():
 def test_register_success(client):
     response = client.post(
         REGISTER_URL,
-        data={"username": "alice", "email": "alice@example.com", "password": "secret123"},
+        data={"email": "alice@example.com", "password": "secret123"},
         content_type="application/json",
     )
     assert response.status_code == 201
@@ -33,8 +33,8 @@ def test_register_success(client):
 
 
 @pytest.mark.django_db
-def test_register_duplicate_username(client):
-    payload = {"username": "bob", "email": "bob@example.com", "password": "secret123"}
+def test_register_duplicate_email(client):
+    payload = {"email": "bob@example.com", "password": "secret123"}
     client.post(REGISTER_URL, data=payload, content_type="application/json")
     response = client.post(REGISTER_URL, data=payload, content_type="application/json")
     assert response.status_code == 400
@@ -45,12 +45,12 @@ def test_register_duplicate_username(client):
 def test_login_success(client):
     client.post(
         REGISTER_URL,
-        data={"username": "carol", "email": "carol@example.com", "password": "secret123"},
+        data={"email": "carol@example.com", "password": "secret123"},
         content_type="application/json",
     )
     response = client.post(
         LOGIN_URL,
-        data={"username": "carol", "password": "secret123"},
+        data={"email": "carol@example.com", "password": "secret123"},
         content_type="application/json",
     )
     assert response.status_code == 200
@@ -61,12 +61,12 @@ def test_login_success(client):
 def test_login_wrong_password(client):
     client.post(
         REGISTER_URL,
-        data={"username": "dave", "email": "dave@example.com", "password": "secret123"},
+        data={"email": "dave@example.com", "password": "secret123"},
         content_type="application/json",
     )
     response = client.post(
         LOGIN_URL,
-        data={"username": "dave", "password": "wrongpassword"},
+        data={"email": "dave@example.com", "password": "wrongpassword"},
         content_type="application/json",
     )
     assert response.status_code == 401
@@ -77,7 +77,7 @@ def test_login_wrong_password(client):
 def test_me_authenticated(client):
     reg = client.post(
         REGISTER_URL,
-        data={"username": "eve", "email": "eve@example.com", "password": "secret123"},
+        data={"email": "eve@example.com", "password": "secret123"},
         content_type="application/json",
     )
     token = reg.json()["token"]
@@ -85,7 +85,6 @@ def test_me_authenticated(client):
     response = client.get(ME_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
     assert response.status_code == 200
     data = response.json()
-    assert data["username"] == "eve"
     assert data["email"] == "eve@example.com"
     assert "id" in data
     assert "date_joined" in data
@@ -110,7 +109,7 @@ def test_me_invalid_token(client):
 def test_me_expired_token_rejected(client):
     reg = client.post(
         REGISTER_URL,
-        data={"username": "frank", "email": "frank@example.com", "password": "secret123"},
+        data={"email": "frank@example.com", "password": "secret123"},
         content_type="application/json",
     )
     token = reg.json()["token"]

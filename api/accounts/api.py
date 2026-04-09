@@ -18,12 +18,12 @@ def _default_session_expiry():
 
 @router.post("/register", response={201: TokenOut, 400: ErrorOut})
 def register(request, payload: RegisterIn):
-    if User.objects.filter(username=payload.username).exists():
-        return Status(400, {"detail": "Username already taken."})
+    email = User.objects.normalize_email(payload.email)
+    if User.objects.filter(email=email).exists():
+        return Status(400, {"detail": "Email already registered."})
 
     user = User.objects.create_user(
-        username=payload.username,
-        email=payload.email,
+        email=email,
         password=payload.password,
     )
     session = UserSession.objects.create(
@@ -35,7 +35,8 @@ def register(request, payload: RegisterIn):
 
 @router.post("/login", response={200: TokenOut, 401: ErrorOut})
 def login(request, payload: LoginIn):
-    user = authenticate(username=payload.username, password=payload.password)
+    email = User.objects.normalize_email(payload.email)
+    user = authenticate(username=email, password=payload.password)
     if user is None:
         return Status(401, {"detail": "Invalid credentials."})
 
