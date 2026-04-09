@@ -14,8 +14,8 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { clearToken } from "@/lib/auth"
+import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
 import {
-  IconBrandTelegram,
   IconCalendarEvent,
   IconChartBar,
   IconCheckbox,
@@ -129,12 +129,6 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton type="button">
-                  <IconBrandTelegram />
-                  <span>Telegram</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton type="button">
                   <IconChartBar />
                   <span>Usage / API key</span>
                 </SidebarMenuButton>
@@ -151,6 +145,9 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
+        <div className="px-2 pb-2">
+          <TelegramLinkPill />
+        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton type="button" onClick={handleLogout}>
