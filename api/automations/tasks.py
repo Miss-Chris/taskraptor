@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from celery import shared_task
@@ -64,14 +65,14 @@ def dispatch_due_automations() -> int:
     for automation in automations:
         if not automation_is_due(automation, now=now):
             continue
-        run_automation.delay(automation.pk)
+        run_automation.delay(str(automation.pk))
         queued += 1
 
     return queued
 
 
 @shared_task(name="automations.run_automation")
-def run_automation(automation_id: int) -> bool:
+def run_automation(automation_id: str | UUID) -> bool:
     with transaction.atomic():
         automation = (
             Automation.objects.select_for_update()

@@ -53,7 +53,7 @@ def test_handle_web_user_message_records_user_and_assistant_messages(
     assert result.error is None
     assert result.response_text == "Done."
 
-    msgs = list(WebChatMessage.objects.filter(conversation=conversation).order_by("pk"))
+    msgs = list(WebChatMessage.objects.filter(conversation=conversation).order_by("created_at"))
     assert len(msgs) == 2
     assert msgs[0].role == WebChatRole.USER
     assert msgs[0].content == "Add a task from web"

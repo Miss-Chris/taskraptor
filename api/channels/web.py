@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
+from uuid import UUID
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet
 
 from agent.schemas import AgentResult
@@ -60,10 +62,10 @@ def record_assistant_message(
 
 
 def get_chat_history(
-    conversation_id: int,
+    conversation_id: UUID,
     *,
     limit: int = 50,
-    before_id: int | None = None,
+    before_id: UUID | None = None,
 ) -> QuerySet[WebChatMessage]:
     """
     Return up to ``limit`` web chat messages in chronological order (oldest first).
@@ -74,10 +76,17 @@ def get_chat_history(
     """
     qs = WebChatMessage.objects.filter(conversation_id=conversation_id)
     if before_id is not None:
-        qs = qs.filter(pk__lt=before_id)
-    pks = list(qs.order_by("-created_at", "-pk").values_list("pk", flat=True)[:limit])
+        try:
+            before = WebChatMessage.objects.only("created_at").get(
+                pk=before_id,
+                conversation_id=conversation_id,
+            )
+        except ObjectDoesNotExist:
+            return WebChatMessage.objects.none()
+        qs = qs.filter(created_at__lt=before.created_at)
+    pks = list(qs.order_by("-created_at").values_list("pk", flat=True)[:limit])
     pks.reverse()
-    return WebChatMessage.objects.filter(pk__in=pks).order_by("created_at", "pk")
+    return WebChatMessage.objects.filter(pk__in=pks).order_by("created_at")
 
 
 def handle_web_user_message(

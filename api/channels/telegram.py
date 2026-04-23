@@ -54,7 +54,7 @@ def get_active_telegram_channel(user) -> Channel | None:
             type=ChannelType.TELEGRAM,
             archived_at__isnull=True,
         )
-        .order_by("-pk")
+        .order_by("-created_at")
         .first()
     )
 

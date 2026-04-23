@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from django.utils import timezone
 
@@ -12,7 +13,7 @@ UNSET = object()
 
 def create_task(
     *,
-    user_id: int,
+    user_id: UUID,
     name: str,
     status: str = TaskStatus.PENDING,
     priority: int = 0,
@@ -34,7 +35,7 @@ def create_task(
 def update_task(
     task: Task,
     *,
-    audit_actor_id: int | None = None,
+    audit_actor_id: UUID | None = None,
     name: Any = UNSET,
     status: Any = UNSET,
     priority: Any = UNSET,
@@ -86,7 +87,7 @@ def update_task(
     return update_fields
 
 
-def soft_delete_task(task: Task, *, audit_actor_id: int | None = None) -> None:
+def soft_delete_task(task: Task, *, audit_actor_id: UUID | None = None) -> None:
     if task.deleted_at is not None:
         raise ValueError(f"Task {task.pk} is already deleted.")
 

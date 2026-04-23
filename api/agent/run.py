@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from uuid import UUID
 
 from typing import Callable
 
@@ -30,7 +31,7 @@ RESPOND_TO_USER_TOOL = "respond_to_user"
 
 
 def run_agent(
-    user_id: int,
+    user_id: UUID,
     llm_model: LlmModel,
     history: list[HistoryMessage],
     new_message: str,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from django.utils import timezone
 
 from channels.models import Channel, ChannelType, Conversation
@@ -11,7 +13,7 @@ from channels.runtime import (
 )
 
 
-def get_conversation(channel_id: int, conversation_id: int | None = None) -> BaseConversation:
+def get_conversation(channel_id: UUID, conversation_id: UUID | None = None) -> BaseConversation:
     channel = Channel.objects.get(pk=channel_id)
 
     if conversation_id is not None:
@@ -19,7 +21,7 @@ def get_conversation(channel_id: int, conversation_id: int | None = None) -> Bas
     else:
         conversation = (
             Conversation.objects.filter(channel_id=channel_id)
-            .order_by("-updated_at", "-pk")
+            .order_by("-updated_at", "-created_at")
             .first()
         )
         if conversation is None:
@@ -36,5 +38,5 @@ def get_conversation(channel_id: int, conversation_id: int | None = None) -> Bas
             raise ValueError(f"Unknown channel type: {channel.type!r}")
 
 
-def touch_conversation(conversation_id: int) -> None:
+def touch_conversation(conversation_id: UUID) -> None:
     Conversation.objects.filter(pk=conversation_id).update(updated_at=timezone.now())

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -55,6 +56,7 @@ class LlmModel(models.Model):
     required.
     """
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -141,6 +143,7 @@ class LlmModel(models.Model):
 
 
 class AgentRun(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel = models.ForeignKey(
         "channels.Channel",
         on_delete=models.CASCADE,
@@ -186,6 +189,7 @@ class AgentRun(models.Model):
 
 
 class MessageLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     agent_run = models.ForeignKey(
         AgentRun,
         on_delete=models.CASCADE,

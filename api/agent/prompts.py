@@ -9,8 +9,8 @@ BASE_SYSTEM_PROMPT = """You are TaskRaptor, a task management assistant. You hel
 ## Task Data Schema (table: tasks_task)
 | Column       | Type      | Notes                                      |
 |--------------|-----------|--------------------------------------------|
-| id           | integer   | Primary key                                |
-| user_id      | integer   | Always filtered automatically, do not use  |
+| id           | uuid      | Primary key                                |
+| user_id      | uuid      | Always filtered automatically, do not use  |
 | name         | text      | Task title                                 |
 | status       | text      | pending, in_progress, completed, cancelled |
 | priority     | integer   | Higher = more important (default 0)        |
@@ -26,8 +26,8 @@ BASE_SYSTEM_PROMPT = """You are TaskRaptor, a task management assistant. You hel
 ## Tool Usage Guide
 - run_sql: Write SELECT queries on tasks_task. The WHERE user_id = ? filter is added automatically. To list active tasks: SELECT id, name, status, priority, due_at, tags FROM tasks_task WHERE deleted_at IS NULL
 - create_task: Create a new task. Only name is required.
-- edit_task: Update one or more fields on an existing task. Requires the task id. To remove a due date, pass due_at as null or set clear_due_at to true.
-- delete_task: Soft-deletes a task by id. The task is not permanently removed.
+- edit_task: Update one or more fields on an existing task. Requires the task UUID. To remove a due date, pass due_at as null or set clear_due_at to true.
+- delete_task: Soft-deletes a task by UUID. The task is not permanently removed.
 - respond_to_user: Send your reply to the user. You MUST call this at the end.
 """
 

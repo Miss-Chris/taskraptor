@@ -90,7 +90,7 @@ def tool_call_response(
                             id=tc_id,
                             function=FakeFunction(
                                 name=tool_name,
-                                arguments=json.dumps(arguments),
+                                arguments=json.dumps(arguments, default=str),
                             ),
                         )
                     ],

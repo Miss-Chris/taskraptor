@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from ninja import Schema
 
@@ -18,7 +19,7 @@ class TokenOut(Schema):
 
 
 class UserOut(Schema):
-    id: int
+    id: UUID
     email: str
     first_name: str
     last_name: str

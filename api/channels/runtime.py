@@ -4,6 +4,7 @@ import logging
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import UUID
 
 from channels.models import Channel, ChannelType, Conversation
 from channels.telegram import send_telegram_message
@@ -14,9 +15,9 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ConversationMetadata:
-    user_id: int
-    channel_id: int
-    conversation_id: int
+    user_id: UUID
+    channel_id: UUID
+    conversation_id: UUID
     channel_type: str
     channel_external_id: str
     conversation_external_id: str
@@ -96,7 +97,7 @@ class WebConversation(BaseConversation):
 
 
 class DummyConversation(BaseConversation):
-    _sent: dict[int, list[str]] = {}
+    _sent: dict[UUID, list[str]] = {}
 
     def send_message(self, text: str, **kwargs: Any) -> None:
         cid = self.conversation.pk

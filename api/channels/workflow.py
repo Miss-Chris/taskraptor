@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 from typing import Callable
 
 from django.utils import timezone
@@ -65,7 +66,7 @@ def handle_user_incoming(
     Returns the AgentResult so callers can inspect the response or tool calls.
     """
     channel = conversation.channel
-    user_id: int = channel.user_id
+    user_id: UUID = channel.user_id
 
     history_logs = list(
         MessageLog.objects.filter(conversation=conversation).order_by("created_at")
@@ -158,7 +159,7 @@ def handle_system_message(
     """
     conversation = (
         Conversation.objects.filter(channel=channel)
-        .order_by("-updated_at", "-pk")
+        .order_by("-updated_at", "-created_at")
         .first()
     )
     if conversation is None:

@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -15,6 +17,7 @@ class ChannelType(models.TextChoices):
 
 
 class Channel(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -48,6 +51,7 @@ class Channel(models.Model):
 
 
 class Conversation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel = models.ForeignKey(
         Channel,
         on_delete=models.CASCADE,
@@ -68,6 +72,7 @@ class Conversation(models.Model):
 
 
 class WebChatMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
@@ -97,6 +102,7 @@ class WebChatMessage(models.Model):
 class TelegramJoinCode(models.Model):
     """One-time code linking a TaskRaptor user to a Telegram chat."""
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from uuid import UUID
 
 import pytest
 from django.utils import timezone
@@ -18,7 +19,7 @@ def test_dispatch_due_automations_enqueues_only_due_rows(monkeypatch, test_user)
         type=ChannelType.WEB,
     )
     now = datetime.datetime(2026, 4, 5, 15, 0, tzinfo=datetime.UTC)
-    queued_ids: list[int] = []
+    queued_ids: list[str] = []
 
     due = Automation.objects.create(
         user=test_user,
@@ -46,7 +47,7 @@ def test_dispatch_due_automations_enqueues_only_due_rows(monkeypatch, test_user)
     queued = dispatch_due_automations()
 
     assert queued == 1
-    assert queued_ids == [due.pk]
+    assert queued_ids == [str(due.pk)]
 
 
 @pytest.mark.django_db
@@ -63,7 +64,7 @@ def test_run_automation_executes_and_marks_last_run_at(monkeypatch, test_user):
         schedule_time=datetime.time(9, 0),
     )
     now = datetime.datetime(2026, 4, 5, 15, 0, tzinfo=datetime.UTC)
-    calls: list[tuple[int, str]] = []
+    calls: list[tuple[UUID, str]] = []
 
     monkeypatch.setattr("automations.tasks.timezone.now", lambda: now)
     monkeypatch.setattr(

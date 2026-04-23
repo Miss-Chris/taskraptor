@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from django.db import connection
 from pydantic import BaseModel, Field, model_validator
@@ -75,7 +76,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "integer", "description": "ID of the task to edit."},
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID of the task to edit.",
+                    },
                     "name": {"type": "string", "description": "New task title."},
                     "status": {
                         "type": "string",
@@ -107,7 +112,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "integer", "description": "ID of the task to delete."},
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID of the task to delete.",
+                    },
                 },
                 "required": ["task_id"],
             },
@@ -154,7 +163,7 @@ class CreateTaskArgs(BaseModel):
 
 
 class EditTaskArgs(BaseModel):
-    task_id: int
+    task_id: UUID
     name: str | None = None
     status: TaskStatus | None = None
     priority: int | None = None
@@ -170,7 +179,7 @@ class EditTaskArgs(BaseModel):
 
 
 class DeleteTaskArgs(BaseModel):
-    task_id: int
+    task_id: UUID
 
 
 class RunSqlArgs(BaseModel):
@@ -187,11 +196,17 @@ def _parse_due_at(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value)
 
 
-def _tool_respond_to_user(args: RespondToUserArgs, user_id: int) -> str:
+def _json_default(value: Any) -> str:
+    if isinstance(value, (datetime, UUID)):
+        return str(value) if isinstance(value, UUID) else value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _tool_respond_to_user(args: RespondToUserArgs, user_id: UUID) -> str:
     return args.message
 
 
-def _tool_create_task(args: CreateTaskArgs, user_id: int) -> str:
+def _tool_create_task(args: CreateTaskArgs, user_id: UUID) -> str:
     due_at = _parse_due_at(args.due_at)
     task = create_task(
         user_id=user_id,
@@ -201,10 +216,10 @@ def _tool_create_task(args: CreateTaskArgs, user_id: int) -> str:
         due_at=due_at,
         tags=args.tags,
     )
-    return json.dumps({"ok": True, "task_id": task.pk, "name": task.name})
+    return json.dumps({"ok": True, "task_id": str(task.pk), "name": task.name})
 
 
-def _tool_edit_task(args: EditTaskArgs, user_id: int) -> str:
+def _tool_edit_task(args: EditTaskArgs, user_id: UUID) -> str:
     try:
         task = Task.objects.get(pk=args.task_id, user_id=user_id, deleted_at__isnull=True)
     except Task.DoesNotExist:
@@ -225,20 +240,20 @@ def _tool_edit_task(args: EditTaskArgs, user_id: int) -> str:
         clear_due_at=args.clear_due_at,
     )
 
-    return json.dumps({"ok": True, "task_id": task.pk, "updated_fields": update_fields})
+    return json.dumps({"ok": True, "task_id": str(task.pk), "updated_fields": update_fields})
 
 
-def _tool_delete_task(args: DeleteTaskArgs, user_id: int) -> str:
+def _tool_delete_task(args: DeleteTaskArgs, user_id: UUID) -> str:
     try:
         task = Task.objects.get(pk=args.task_id, user_id=user_id, deleted_at__isnull=True)
     except Task.DoesNotExist:
         return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
 
     soft_delete_task(task, audit_actor_id=user_id)
-    return json.dumps({"ok": True, "task_id": args.task_id})
+    return json.dumps({"ok": True, "task_id": str(args.task_id)})
 
 
-def _tool_run_sql(args: RunSqlArgs, user_id: int) -> str:
+def _tool_run_sql(args: RunSqlArgs, user_id: UUID) -> str:
     query = args.query.strip()
 
     if not query.upper().startswith("SELECT"):
@@ -263,10 +278,10 @@ def _tool_run_sql(args: RunSqlArgs, user_id: int) -> str:
     # Convert non-serializable types (datetime, etc.)
     for row in data:
         for k, v in row.items():
-            if isinstance(v, datetime):
-                row[k] = v.isoformat()
+            if isinstance(v, (datetime, UUID)):
+                row[k] = _json_default(v)
 
-    return json.dumps({"ok": True, "rows": data, "count": len(data)})
+    return json.dumps({"ok": True, "rows": data, "count": len(data)}, default=_json_default)
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +297,7 @@ _TOOL_MAP = {
 }
 
 
-def execute_tool(tool_name: str, arguments: dict, user_id: int) -> str:
+def execute_tool(tool_name: str, arguments: dict, user_id: UUID) -> str:
     """
     Validate and execute a tool call. Always returns a string (JSON or plain text)
     suitable for feeding back to the LLM as a tool result.
