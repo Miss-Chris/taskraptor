@@ -288,7 +288,7 @@ export function TasksPage() {
         <div className="space-y-5 p-3">
           <nav aria-label="Task scopes" className="space-y-1">
             {STATUS_OPTIONS.map((option) => {
-              const Icon = option.value ? STATUS_ICON[option.value] : IconInbox
+              const Icon = (option.value ? STATUS_ICON[option.value] : undefined) ?? IconInbox
               const active = status === option.value
               const count = scopeCount(facets, option.value)
               return (

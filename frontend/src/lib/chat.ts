@@ -1,6 +1,6 @@
 import { getToken } from "@/lib/auth"
 
-export type ChatMessageRole = "user" | "assistant"
+export type ChatMessageRole = string
 
 export type ChatMessage = {
   id: string

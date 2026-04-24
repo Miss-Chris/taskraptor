@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { clearToken } from "@/lib/auth"
 import {
   createChatConversation,
-  fetchChatConversation,
   fetchChatMessagesAfter,
   fetchChatRun,
   sendChatMessage,
@@ -15,6 +14,7 @@ import {
   type ChatRun,
 } from "@/lib/chat"
 import { cn } from "@/lib/utils"
+import { useChatConversationQuery } from "@/queries/chat"
 import { IconAlertTriangle, IconMessagePlus, IconSend, IconSparkles } from "@tabler/icons-react"
 
 const POLL_MS = 1500
@@ -71,7 +71,9 @@ function parseInlineMarkdown(text: string): ReactNode[] {
     }
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (linkMatch) {
-      const [, label, href] = linkMatch
+      const label = linkMatch[1] ?? ""
+      const href = linkMatch[2]
+      if (!href) return part
       const safeHref = href.startsWith("http://") || href.startsWith("https://") ? href : undefined
       return safeHref ? (
         <a
@@ -159,11 +161,13 @@ function MarkdownMessage({ content }: { content: string }) {
     if (headingMatch) {
       flushParagraph()
       flushList()
-      const level = headingMatch[1].length
+      const marker = headingMatch[1] ?? ""
+      const text = headingMatch[2] ?? ""
+      const level = marker.length
       const className = level === 1 ? "text-base font-semibold" : "text-sm font-semibold"
       blocks.push(
         <p key={`h-${blocks.length}`} className={className}>
-          {parseInlineMarkdown(headingMatch[2])}
+          {parseInlineMarkdown(text)}
         </p>,
       )
       continue
@@ -178,7 +182,7 @@ function MarkdownMessage({ content }: { content: string }) {
           key={`quote-${blocks.length}`}
           className="border-l-2 border-border pl-3 text-muted-foreground"
         >
-          {parseInlineMarkdown(quoteMatch[1])}
+          {parseInlineMarkdown(quoteMatch[1] ?? "")}
         </blockquote>,
       )
       continue
@@ -187,7 +191,7 @@ function MarkdownMessage({ content }: { content: string }) {
     const listMatch = line.match(/^[-*]\s+(.+)$/)
     if (listMatch) {
       flushParagraph()
-      listItems.push(listMatch[1])
+      listItems.push(listMatch[1] ?? "")
       continue
     }
 
@@ -238,7 +242,6 @@ export function ChatPage() {
   const [conversation, setConversation] = useState<ChatConversation | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [runs, setRuns] = useState<ChatRun[]>([])
-  const [loading, setLoading] = useState(Boolean(conversationId))
   const [creating, setCreating] = useState(false)
   const [sending, setSending] = useState(false)
   const [input, setInput] = useState("")
@@ -246,6 +249,8 @@ export function ChatPage() {
   const [runError, setRunError] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const conversationQuery = useChatConversationQuery(conversationId)
+  const loading = Boolean(conversationId) && conversationQuery.isPending
 
   const latestRun = runs[0] ?? conversation?.latest_run ?? null
   const activeRun = isActiveRun(latestRun) ? latestRun : null
@@ -283,45 +288,40 @@ export function ChatPage() {
       setConversation(null)
       setMessages([])
       setRuns([])
-      setLoading(false)
       setError(null)
       setRunError(null)
       setNotFound(false)
       return
     }
 
-    let cancelled = false
-    setLoading(true)
     setError(null)
     setRunError(null)
     setNotFound(false)
-    ;(async () => {
-      try {
-        const detail = await fetchChatConversation(conversationId)
-        if (cancelled) return
-        setConversation(detail.conversation)
-        setMessages(detail.messages)
-        setRuns(detail.runs)
-        const failedRun = detail.runs.find((run) => run.status === "failed" && run.error)
-        setRunError(failedRun?.error ?? null)
-      } catch (e) {
-        if (cancelled) return
-        const message = e instanceof Error ? e.message : "Failed to load conversation"
-        if (handleAuthError(message)) return
-        if (message === "NOT_FOUND") {
-          setNotFound(true)
-        } else {
-          setError(message)
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+  }, [conversationId])
 
-    return () => {
-      cancelled = true
+  useEffect(() => {
+    if (!conversationId || !conversationQuery.data) return
+    setConversation(conversationQuery.data.conversation)
+    setMessages(conversationQuery.data.messages)
+    setRuns(conversationQuery.data.runs)
+    const failedRun = conversationQuery.data.runs.find((run) => run.status === "failed" && run.error)
+    setRunError(failedRun?.error ?? null)
+  }, [conversationId, conversationQuery.data])
+
+  useEffect(() => {
+    if (!conversationId || !conversationQuery.error) return
+    const message =
+      conversationQuery.error instanceof Error ? conversationQuery.error.message : "Failed to load conversation"
+    if (handleAuthError(message)) return
+    setConversation(null)
+    setMessages([])
+    setRuns([])
+    if (message === "NOT_FOUND") {
+      setNotFound(true)
+    } else {
+      setError(message)
     }
-  }, [conversationId, handleAuthError])
+  }, [conversationId, conversationQuery.error, handleAuthError])
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ block: "end" })

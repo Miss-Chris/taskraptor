@@ -347,8 +347,9 @@ export function DebugPage() {
     try {
       const conversationsData = await fetchDebugConversations()
       setConversations(conversationsData.conversations)
-      if (!selectedId && conversationsData.conversations.length > 0) {
-        setSearchParams({ conversation: conversationsData.conversations[0].id }, { replace: true })
+      const firstConversation = conversationsData.conversations[0]
+      if (!selectedId && firstConversation) {
+        setSearchParams({ conversation: firstConversation.id }, { replace: true })
       }
     } catch (e) {
       handleError(e)
