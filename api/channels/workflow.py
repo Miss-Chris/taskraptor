@@ -56,6 +56,8 @@ def handle_user_incoming(
     conversation: Conversation,
     message: str,
     llm_callable: Callable | None = None,
+    agent_run: AgentRun | None = None,
+    deliver_on_error: bool = True,
 ) -> AgentResult:
     """
     Orchestrate a single user turn for the given conversation.
@@ -74,22 +76,28 @@ def handle_user_incoming(
     )
     history = history_from_message_logs(history_logs)
 
-    llm_model = (
-        LlmModel.objects.filter(user_id=user_id, is_active=True)
-        .order_by("-created_at")
-        .first()
-    )
-    if llm_model is None:
-        llm_model = get_or_create_system_model(channel.user)
+    if agent_run is None:
+        llm_model = (
+            LlmModel.objects.filter(user_id=user_id, is_active=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if llm_model is None:
+            llm_model = get_or_create_system_model(channel.user)
 
-    agent_run = AgentRun.objects.create(
-        channel=channel,
-        conversation=conversation,
-        user_id=user_id,
-        llm_model=llm_model,
-        status=AgentRunStatus.RUNNING,
-        started_at=timezone.now(),
-    )
+        agent_run = AgentRun.objects.create(
+            channel=channel,
+            conversation=conversation,
+            user_id=user_id,
+            llm_model=llm_model,
+            status=AgentRunStatus.RUNNING,
+            started_at=timezone.now(),
+        )
+    else:
+        llm_model = agent_run.llm_model
+        agent_run.status = AgentRunStatus.RUNNING
+        agent_run.started_at = agent_run.started_at or timezone.now()
+        agent_run.save(update_fields=["status", "started_at"])
 
     try:
         local_context = local_now_context(channel.user.timezone)
@@ -131,20 +139,21 @@ def handle_user_incoming(
     agent_run.completed_at = timezone.now()
     agent_run.save(update_fields=["status", "error", "completed_at"])
 
-    runtime_conv = get_conversation(channel.pk, conversation.pk)
-    delivered = False
-    for msg in result.new_messages:
-        if msg.actor == "tool_call" and msg.tool_name == "respond_to_user":
-            text = (msg.arguments or {}).get("message", "")
-            if text:
-                runtime_conv.send_message(text, agent_run=agent_run)
-                delivered = True
+    if deliver_on_error or not result.error:
+        runtime_conv = get_conversation(channel.pk, conversation.pk)
+        delivered = False
+        for msg in result.new_messages:
+            if msg.actor == "tool_call" and msg.tool_name == "respond_to_user":
+                text = (msg.arguments or {}).get("message", "")
+                if text:
+                    runtime_conv.send_message(text, agent_run=agent_run)
+                    delivered = True
 
-    if not delivered:
-        for msg in reversed(result.new_messages):
-            if msg.actor == "assistant" and msg.content:
-                runtime_conv.send_message(msg.content, agent_run=agent_run)
-                break
+        if not delivered:
+            for msg in reversed(result.new_messages):
+                if msg.actor == "assistant" and msg.content:
+                    runtime_conv.send_message(msg.content, agent_run=agent_run)
+                    break
 
     logger.info(
         "[workflow] handle_user_incoming conversation_id=%s agent_run_id=%s status=%s iterations=%s",
