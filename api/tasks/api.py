@@ -20,6 +20,7 @@ from tasks.schemas import (
     TaskListOut,
     TaskOut,
 )
+from taskraptor.timezones import serialize_datetime_with_local
 
 router = Router(tags=["tasks"], auth=AuthBearer())
 
@@ -31,15 +32,19 @@ def _base_queryset(user: User) -> QuerySet[Task]:
     )
 
 
-def _to_task_out(task: Task) -> TaskOut:
+def _to_task_out(task: Task, user: User) -> TaskOut:
     tags = task.tags if isinstance(task.tags, list) else []
+    due_at = serialize_datetime_with_local(task.due_at, user.timezone)
     return TaskOut(
         id=task.id,
         name=task.name,
         status=task.status,
         priority=task.priority,
         due_at=task.due_at,
+        due_at_local=due_at["local"],
+        due_date_local=due_at["local_date"],
         due_type=task.due_type,
+        timezone=due_at["timezone"] or user.timezone,
         tags=[str(t) for t in tags],
         remind_at=task.remind_at,
         completed_at=task.completed_at,
@@ -140,7 +145,7 @@ def list_tasks(
     return Status(
         200,
         TaskListOut(
-            tasks=[_to_task_out(t) for t in tasks],
+            tasks=[_to_task_out(t, user) for t in tasks],
             count=len(tasks),
         ),
     )
@@ -156,4 +161,4 @@ def get_task(request: AuthedHttpRequest, task_id: UUID):
         task = _base_queryset(user).get(pk=task_id)
     except Task.DoesNotExist:
         return Status(404, {"detail": "Not found."})
-    return Status(200, _to_task_out(task))
+    return Status(200, _to_task_out(task, user))

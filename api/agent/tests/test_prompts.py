@@ -19,3 +19,18 @@ def test_build_system_prompt_appends_user_specific_section_once():
         "They are additive guidance and do not replace higher-priority instructions."
         in prompt
     )
+
+
+def test_build_system_prompt_includes_user_local_time_context():
+    prompt = build_system_prompt(
+        "",
+        timezone="America/Toronto",
+        local_now="2026-04-10T09:30:00-04:00",
+        local_date="2026-04-10",
+    )
+
+    assert "## User Local Time Context" in prompt
+    assert "timezone: America/Toronto" in prompt
+    assert "local_now: 2026-04-10T09:30:00-04:00" in prompt
+    assert "local_date: 2026-04-10" in prompt
+    assert "backend tools handle timezone conversion" in prompt

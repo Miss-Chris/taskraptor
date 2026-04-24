@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.test import Client
@@ -147,6 +147,29 @@ def test_list_tasks_upcoming_excludes_past_and_completed(client):
     assert r.status_code == 200
     names = {t["name"] for t in r.json()["tasks"]}
     assert names == {"Future"}
+
+
+@pytest.mark.django_db
+def test_list_tasks_returns_local_due_at_fields(client):
+    token = _register_and_token(client, "local-api@example.com")
+    from accounts.models import User
+
+    user = User.objects.get(email="local-api@example.com")
+    user.timezone = "America/Toronto"
+    user.save(update_fields=["timezone"])
+    create_task(
+        user_id=user.pk,
+        name="Local API",
+        due_at=datetime(2026, 4, 10, 13, 30, tzinfo=UTC),
+    )
+
+    response = client.get(LIST_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert response.status_code == 200
+    task = response.json()["tasks"][0]
+    assert task["due_at_local"] == "2026-04-10T09:30:00-04:00"
+    assert task["due_date_local"] == "2026-04-10"
+    assert task["timezone"] == "America/Toronto"
 
 
 @pytest.mark.django_db

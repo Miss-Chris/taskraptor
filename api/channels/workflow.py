@@ -11,6 +11,7 @@ from agent.prompts import build_system_prompt
 from agent.run import run_agent
 from agent.schemas import AgentResult
 from agent.utils import history_from_message_logs
+from taskraptor.timezones import local_now_context
 from channels.models import Channel, Conversation
 from channels.services import get_conversation, touch_conversation
 
@@ -91,7 +92,13 @@ def handle_user_incoming(
     )
 
     try:
-        system_prompt = build_system_prompt(channel.user.prompt_instructions)
+        local_context = local_now_context(channel.user.timezone)
+        system_prompt = build_system_prompt(
+            channel.user.prompt_instructions,
+            timezone=local_context["timezone"],
+            local_now=local_context["local_now"],
+            local_date=local_context["local_date"],
+        )
         result = run_agent(
             user_id=user_id,
             llm_model=llm_model,

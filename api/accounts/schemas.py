@@ -23,7 +23,12 @@ class UserOut(Schema):
     email: str
     first_name: str
     last_name: str
+    timezone: str
     date_joined: datetime
+
+
+class UserTimezoneIn(Schema):
+    timezone: str
 
 
 class ErrorOut(Schema):

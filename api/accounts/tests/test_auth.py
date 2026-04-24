@@ -10,6 +10,7 @@ from agent.models import LlmModel, SYSTEM_FREE_MODEL_KEY
 REGISTER_URL = "/api/auth/register"
 LOGIN_URL = "/api/auth/login"
 ME_URL = "/api/auth/me"
+TIMEZONE_URL = "/api/auth/me/timezone"
 
 
 @pytest.fixture
@@ -105,8 +106,49 @@ def test_me_authenticated(client):
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "eve@example.com"
+    assert data["timezone"] == "UTC"
     assert "id" in data
     assert "date_joined" in data
+
+
+@pytest.mark.django_db
+def test_update_timezone_success(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        TIMEZONE_URL,
+        data={"timezone": "America/Toronto"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["timezone"] == "America/Toronto"
+
+
+@pytest.mark.django_db
+def test_update_timezone_rejects_invalid_timezone(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "bad-tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        TIMEZONE_URL,
+        data={"timezone": "Not/AZone"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid IANA timezone."
 
 
 @pytest.mark.django_db

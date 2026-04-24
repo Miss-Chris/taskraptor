@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from agent.tools import execute_tool
-from tasks.models import AuditAction, TaskAuditLog, TaskStatus
+from tasks.models import AuditAction, DueType, Task, TaskAuditLog, TaskStatus
 from tasks.services import create_task, update_task
 
 User = get_user_model()
@@ -36,6 +36,20 @@ def test_update_task_sets_and_clears_completed_at(test_user):
 
 
 @pytest.mark.django_db
+def test_task_service_normalizes_naive_due_at_in_user_timezone(test_user):
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+
+    task = create_task(
+        user_id=test_user.pk,
+        name="Service local",
+        due_at=datetime(2026, 4, 10, 9, 30),
+    )
+
+    assert task.due_at == datetime(2026, 4, 10, 13, 30, tzinfo=UTC)
+
+
+@pytest.mark.django_db
 def test_edit_task_tool_can_clear_due_at(test_user):
     task = create_task(
         user_id=test_user.pk,
@@ -55,6 +69,59 @@ def test_edit_task_tool_can_clear_due_at(test_user):
     assert "due_at" in result["updated_fields"]
     task.refresh_from_db()
     assert task.due_at is None
+
+
+@pytest.mark.django_db
+def test_create_task_tool_interprets_naive_due_at_in_user_timezone(test_user):
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+
+    result = json.loads(
+        execute_tool(
+            "create_task",
+            {"name": "Local meeting", "due_at": "2026-04-10T09:30:00"},
+            test_user.pk,
+        )
+    )
+
+    assert result["ok"] is True
+    task = Task.objects.get(pk=result["task_id"])
+    assert task.due_at == datetime(2026, 4, 10, 13, 30, tzinfo=UTC)
+    assert task.due_type == DueType.TIME
+
+
+@pytest.mark.django_db
+def test_create_task_tool_normalizes_aware_due_at_to_utc(test_user):
+    result = json.loads(
+        execute_tool(
+            "create_task",
+            {"name": "Offset meeting", "due_at": "2026-04-10T09:30:00-07:00"},
+            test_user.pk,
+        )
+    )
+
+    assert result["ok"] is True
+    task = Task.objects.get(pk=result["task_id"])
+    assert task.due_at == datetime(2026, 4, 10, 16, 30, tzinfo=UTC)
+
+
+@pytest.mark.django_db
+def test_create_task_tool_treats_date_only_due_at_as_local_day_end(test_user):
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+
+    result = json.loads(
+        execute_tool(
+            "create_task",
+            {"name": "File taxes", "due_at": "2026-04-10"},
+            test_user.pk,
+        )
+    )
+
+    assert result["ok"] is True
+    task = Task.objects.get(pk=result["task_id"])
+    assert task.due_at == datetime(2026, 4, 11, 3, 59, 59, 999999, tzinfo=UTC)
+    assert task.due_type == DueType.DATE
 
 
 @pytest.mark.django_db
@@ -138,6 +205,58 @@ def test_query_tasks_tool_filters_by_status_tag_priority_upcoming_and_search(tes
     assert result["ok"] is True
     assert result["count"] == 1
     assert result["tasks"][0]["name"] == "Pay invoice"
+
+
+@pytest.mark.django_db
+def test_query_tasks_tool_returns_utc_and_local_due_at_fields(test_user):
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+    task = create_task(
+        user_id=test_user.pk,
+        name="Local fields",
+        due_at=datetime(2026, 4, 10, 13, 30, tzinfo=UTC),
+    )
+
+    result = json.loads(execute_tool("query_tasks", {"search": "Local fields"}, test_user.pk))
+
+    assert result["ok"] is True
+    returned = result["tasks"][0]
+    assert returned["id"] == str(task.pk)
+    assert returned["due_at"] == "2026-04-10T13:30:00+00:00"
+    assert returned["due_at_local"] == "2026-04-10T09:30:00-04:00"
+    assert returned["due_date_local"] == "2026-04-10"
+    assert returned["timezone"] == "America/Toronto"
+
+
+@pytest.mark.django_db
+def test_same_local_due_at_stores_different_utc_instants_by_user_timezone(test_user):
+    other_user = User.objects.create_user(
+        email="pacific_task_lifecycle@example.com",
+        password="testpass123",
+        timezone="America/Los_Angeles",
+    )
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+
+    east = json.loads(
+        execute_tool(
+            "create_task",
+            {"name": "Same local", "due_at": "2026-04-10T09:00:00"},
+            test_user.pk,
+        )
+    )
+    west = json.loads(
+        execute_tool(
+            "create_task",
+            {"name": "Same local", "due_at": "2026-04-10T09:00:00"},
+            other_user.pk,
+        )
+    )
+
+    east_task = Task.objects.get(pk=east["task_id"])
+    west_task = Task.objects.get(pk=west["task_id"])
+    assert east_task.due_at == datetime(2026, 4, 10, 13, 0, tzinfo=UTC)
+    assert west_task.due_at == datetime(2026, 4, 10, 16, 0, tzinfo=UTC)
 
 
 @pytest.mark.django_db

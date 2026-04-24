@@ -7,8 +7,9 @@ from ninja import Router, Status
 
 from accounts.bearer import AuthBearer
 from accounts.models import User, UserSession
-from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut
+from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut, UserTimezoneIn
 from agent.models import get_or_create_system_model
+from taskraptor.timezones import is_valid_timezone
 
 router = Router(tags=["auth"])
 
@@ -52,3 +53,19 @@ def login(request, payload: LoginIn):
 @router.get("/me", auth=AuthBearer(), response={200: UserOut, 401: ErrorOut})
 def me(request):
     return Status(200, request.auth)
+
+
+@router.patch(
+    "/me/timezone",
+    auth=AuthBearer(),
+    response={200: UserOut, 400: ErrorOut, 401: ErrorOut},
+)
+def update_timezone(request, payload: UserTimezoneIn):
+    timezone_name = payload.timezone.strip()
+    if not is_valid_timezone(timezone_name):
+        return Status(400, {"detail": "Invalid IANA timezone."})
+
+    user = request.auth
+    user.timezone = timezone_name
+    user.save(update_fields=["timezone"])
+    return Status(200, user)

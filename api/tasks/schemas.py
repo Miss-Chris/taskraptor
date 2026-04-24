@@ -10,7 +10,10 @@ class TaskOut(Schema):
     status: str
     priority: int
     due_at: datetime | None
+    due_at_local: str | None
+    due_date_local: str | None
     due_type: str
+    timezone: str
     tags: list[str]
     remind_at: datetime | None
     completed_at: datetime | None
@@ -38,5 +41,4 @@ class TaskFacetsOut(Schema):
     tag_counts: list[TagCountItem]
     # Total non-deleted tasks for the current user
     total: int
-
 

@@ -9,8 +9,10 @@ from django.db import connection
 from django.utils import timezone
 from pydantic import BaseModel, Field, model_validator
 
-from tasks.models import Task, TaskStatus
+from accounts.models import User
+from tasks.models import DueType, Task, TaskStatus
 from tasks.services import UNSET, create_task, soft_delete_task, update_task
+from taskraptor.timezones import parse_user_datetime, serialize_datetime_with_local
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +59,12 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     },
                     "due_at": {
                         "type": "string",
-                        "description": "ISO 8601 datetime for when the task is due, e.g. 2026-04-10T09:00:00.",
+                        "description": "ISO 8601 local date or datetime for when the task is due. Date-only values are due at the end of that local day. The backend normalizes to UTC using the user's timezone.",
+                    },
+                    "due_type": {
+                        "type": "string",
+                        "enum": ["date", "time"],
+                        "description": "Use date for date-only due dates and time for due dates with an explicit time.",
                     },
                     "tags": {
                         "type": "array",
@@ -90,7 +97,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "priority": {"type": "integer"},
                     "due_at": {
                         "type": "string",
-                        "description": "ISO 8601 datetime. Use null or clear_due_at=true to remove it.",
+                        "description": "ISO 8601 local date or datetime. Use null or clear_due_at=true to remove it. The backend normalizes to UTC using the user's timezone.",
+                    },
+                    "due_type": {
+                        "type": "string",
+                        "enum": ["date", "time"],
                     },
                     "clear_due_at": {
                         "type": "boolean",
@@ -192,6 +203,7 @@ class CreateTaskArgs(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     priority: int = 0
     due_at: str | None = None
+    due_type: DueType | None = None
     tags: list[str] = Field(default_factory=list)
 
 
@@ -201,6 +213,7 @@ class EditTaskArgs(BaseModel):
     status: TaskStatus | None = None
     priority: int | None = None
     due_at: str | None = None
+    due_type: DueType | None = None
     clear_due_at: bool = False
     tags: list[str] | None = None
 
@@ -235,10 +248,11 @@ class RunSqlArgs(BaseModel):
 # Tool implementations
 # ---------------------------------------------------------------------------
 
-def _parse_due_at(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    return datetime.fromisoformat(value)
+def _parse_due_at(value: str | None, user_timezone: str) -> tuple[datetime | None, DueType | None]:
+    due_at, is_date_only = parse_user_datetime(value, user_timezone)
+    if value is None:
+        return due_at, None
+    return due_at, DueType.DATE if is_date_only else DueType.TIME
 
 
 def _json_default(value: Any) -> str:
@@ -252,13 +266,15 @@ def _tool_respond_to_user(args: RespondToUserArgs, user_id: UUID) -> str:
 
 
 def _tool_create_task(args: CreateTaskArgs, user_id: UUID) -> str:
-    due_at = _parse_due_at(args.due_at)
+    user = User.objects.get(pk=user_id)
+    due_at, inferred_due_type = _parse_due_at(args.due_at, user.timezone)
     task = create_task(
         user_id=user_id,
         name=args.name,
         status=args.status,
         priority=args.priority,
         due_at=due_at,
+        due_type=args.due_type or inferred_due_type or DueType.TIME,
         tags=args.tags,
     )
     return json.dumps({"ok": True, "task_id": str(task.pk), "name": task.name})
@@ -270,9 +286,17 @@ def _tool_edit_task(args: EditTaskArgs, user_id: UUID) -> str:
     except Task.DoesNotExist:
         return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
 
+    user = User.objects.get(pk=user_id)
     due_at = UNSET
+    due_type = UNSET
     if "due_at" in args.model_fields_set:
-        due_at = _parse_due_at(args.due_at)
+        due_at, inferred_due_type = _parse_due_at(args.due_at, user.timezone)
+        if args.due_at is not None:
+            due_type = args.due_type or inferred_due_type or DueType.TIME
+        elif args.due_type is not None:
+            due_type = args.due_type
+    elif args.due_type is not None:
+        due_type = args.due_type
 
     update_fields = update_task(
         task,
@@ -281,6 +305,7 @@ def _tool_edit_task(args: EditTaskArgs, user_id: UUID) -> str:
         status=args.status if args.status is not None else UNSET,
         priority=args.priority if args.priority is not None else UNSET,
         due_at=due_at,
+        due_type=due_type,
         tags=args.tags if args.tags is not None else UNSET,
         clear_due_at=args.clear_due_at,
     )
@@ -298,15 +323,19 @@ def _tool_delete_task(args: DeleteTaskArgs, user_id: UUID) -> str:
     return json.dumps({"ok": True, "task_id": str(args.task_id)})
 
 
-def _task_to_dict(task: Task) -> dict[str, Any]:
+def _task_to_dict(task: Task, user_timezone: str) -> dict[str, Any]:
     tags = task.tags if isinstance(task.tags, list) else []
+    due_at = serialize_datetime_with_local(task.due_at, user_timezone)
     return {
         "id": str(task.pk),
         "name": task.name,
         "status": task.status,
         "priority": task.priority,
         "due_at": task.due_at.isoformat() if task.due_at else None,
+        "due_at_local": due_at["local"],
+        "due_date_local": due_at["local_date"],
         "due_type": task.due_type,
+        "timezone": due_at["timezone"],
         "tags": [str(tag) for tag in tags],
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "archived_at": task.archived_at.isoformat() if task.archived_at else None,
@@ -315,6 +344,7 @@ def _task_to_dict(task: Task) -> dict[str, Any]:
 
 
 def _tool_query_tasks(args: QueryTasksArgs, user_id: UUID) -> str:
+    user = User.objects.get(pk=user_id)
     qs = Task.objects.filter(user_id=user_id, deleted_at__isnull=True)
 
     if args.status is not None:
@@ -357,7 +387,7 @@ def _tool_query_tasks(args: QueryTasksArgs, user_id: UUID) -> str:
     return json.dumps(
         {
             "ok": True,
-            "tasks": [_task_to_dict(task) for task in tasks],
+            "tasks": [_task_to_dict(task, user.timezone) for task in tasks],
             "count": len(tasks),
         },
         default=_json_default,

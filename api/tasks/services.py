@@ -6,7 +6,9 @@ from uuid import UUID
 
 from django.utils import timezone
 
-from tasks.models import AuditAction, Task, TaskAuditLog, TaskStatus
+from accounts.models import User
+from tasks.models import AuditAction, DueType, Task, TaskAuditLog, TaskStatus
+from taskraptor.timezones import normalize_to_utc
 
 UNSET = object()
 
@@ -18,8 +20,13 @@ def create_task(
     status: str = TaskStatus.PENDING,
     priority: int = 0,
     due_at: datetime | None = None,
+    due_type: str = DueType.TIME,
     tags: list[str] | None = None,
 ) -> Task:
+    if due_at is not None:
+        user_timezone = User.objects.values_list("timezone", flat=True).get(pk=user_id)
+        due_at = normalize_due_at_for_user(due_at, user_timezone)
+
     completed_at = timezone.now() if status == TaskStatus.COMPLETED else None
     return Task.objects.create(
         user_id=user_id,
@@ -27,9 +34,19 @@ def create_task(
         status=status,
         priority=priority,
         due_at=due_at,
+        due_type=due_type,
         tags=tags or [],
         completed_at=completed_at,
     )
+
+
+def normalize_due_at_for_user(
+    due_at: datetime | None,
+    user_timezone: str | None,
+) -> datetime | None:
+    if due_at is None:
+        return None
+    return normalize_to_utc(due_at, user_timezone)
 
 
 def update_task(
@@ -40,6 +57,7 @@ def update_task(
     status: Any = UNSET,
     priority: Any = UNSET,
     due_at: Any = UNSET,
+    due_type: Any = UNSET,
     tags: Any = UNSET,
     clear_due_at: bool = False,
 ) -> list[str]:
@@ -68,11 +86,15 @@ def update_task(
         update_fields.append("priority")
 
     if due_at is not UNSET:
-        task.due_at = due_at
+        task.due_at = normalize_due_at_for_user(due_at, task.user.timezone)
         update_fields.append("due_at")
     elif clear_due_at:
         task.due_at = None
         update_fields.append("due_at")
+
+    if due_type is not UNSET:
+        task.due_type = due_type
+        update_fields.append("due_type")
 
     if tags is not UNSET:
         task.tags = tags

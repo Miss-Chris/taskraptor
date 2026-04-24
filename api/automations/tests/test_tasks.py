@@ -114,3 +114,60 @@ def test_run_automation_skips_when_already_run_today_in_user_timezone(
 
     assert ran is False
     assert called is False
+
+
+@pytest.mark.django_db
+def test_automation_runs_at_user_local_wall_clock_time(monkeypatch, test_user):
+    test_user.timezone = "America/Los_Angeles"
+    test_user.save(update_fields=["timezone"])
+    channel = Channel.objects.create(
+        user=test_user,
+        name="Web",
+        type=ChannelType.WEB,
+    )
+    automation = Automation.objects.create(
+        user=test_user,
+        channel=channel,
+        prompt="Local 9am",
+        schedule_time=datetime.time(9, 0),
+    )
+    now = datetime.datetime(2026, 4, 5, 16, 0, tzinfo=datetime.UTC)
+
+    monkeypatch.setattr("automations.tasks.timezone.now", lambda: now)
+    monkeypatch.setattr("automations.tasks.handle_system_message", lambda *_: None)
+
+    assert run_automation(automation.pk) is True
+
+
+@pytest.mark.django_db
+def test_automation_dst_fall_back_does_not_double_run_same_local_day(
+    monkeypatch,
+    test_user,
+):
+    test_user.timezone = "America/New_York"
+    test_user.save(update_fields=["timezone"])
+    channel = Channel.objects.create(
+        user=test_user,
+        name="Web",
+        type=ChannelType.WEB,
+    )
+    automation = Automation.objects.create(
+        user=test_user,
+        channel=channel,
+        prompt="DST",
+        schedule_time=datetime.time(1, 30),
+        last_run_at=datetime.datetime(2026, 11, 1, 5, 35, tzinfo=datetime.UTC),
+    )
+    second_130 = datetime.datetime(2026, 11, 1, 6, 35, tzinfo=datetime.UTC)
+    called = False
+
+    monkeypatch.setattr("automations.tasks.timezone.now", lambda: second_130)
+
+    def _unexpected_call(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("automations.tasks.handle_system_message", _unexpected_call)
+
+    assert run_automation(automation.pk) is False
+    assert called is False

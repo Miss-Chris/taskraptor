@@ -26,23 +26,12 @@ def _get_user_timezone(timezone_name: str) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
-def _scheduled_at_for_local_day(automation: Automation, local_now: datetime) -> datetime:
-    schedule_time = automation.schedule_time
-    return local_now.replace(
-        hour=schedule_time.hour,
-        minute=schedule_time.minute,
-        second=schedule_time.second,
-        microsecond=schedule_time.microsecond,
-    )
-
-
 def automation_is_due(automation: Automation, now: datetime | None = None) -> bool:
     now = now or timezone.now()
     user_timezone = _get_user_timezone(automation.user.timezone)
     local_now = timezone.localtime(now, user_timezone)
-    scheduled_at = _scheduled_at_for_local_day(automation, local_now)
 
-    if local_now < scheduled_at:
+    if local_now.time() < automation.schedule_time:
         return False
 
     if automation.last_run_at is None:
