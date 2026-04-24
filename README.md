@@ -1,6 +1,12 @@
 # TaskRaptor
 
-Backend API lives in [`/Users/anirudh/work/taskraptor/api`](/Users/anirudh/work/taskraptor/api) and uses Django, Django Ninja, `uv`, Celery, and Redis.
+TaskRaptor is an open-source task and automation app with a Django/Django Ninja API and a Vite/React frontend.
+
+## Self-hosting
+
+TaskRaptor includes a Docker Compose setup modeled around a single public Caddy endpoint, a Django API container, Redis, Celery worker/beat containers, and an external PostgreSQL database.
+
+See [`docs/self-hosting.md`](/Users/anirudh/work/taskraptor/docs/self-hosting.md) for the full setup guide.
 
 ## Local setup
 

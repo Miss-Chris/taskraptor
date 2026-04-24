@@ -1,0 +1,103 @@
+name: taskraptor-prod
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-api-env: &api-env
+  env_file:
+    - ./env.txt
+  volumes:
+    - ./env.txt:/app/.env:ro
+  environment:
+    DJANGO_SETTINGS_MODULE: taskraptor.settings.production
+  logging: *default-logging
+  networks:
+    - taskraptor_network
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: taskraptor_caddy
+    ports:
+      - "80:80"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - taskraptor_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskraptor_redis
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - taskraptor_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  init:
+    <<: *api-env
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: taskraptor_init
+    command: ./init.sh
+    depends_on:
+      redis:
+        condition: service_started
+    restart: "no"
+
+  api:
+    <<: *api-env
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: taskraptor_api
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    <<: *api-env
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: taskraptor_worker
+    command: uv run celery -A taskraptor worker --loglevel=info
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  beat:
+    <<: *api-env
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: taskraptor_beat
+    command: uv run celery -A taskraptor beat --loglevel=info
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+networks:
+  taskraptor_network:
+    driver: bridge

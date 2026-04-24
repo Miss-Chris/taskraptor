@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { AppShell } from "@/components/layout/AppShell"
+import { AutomationsPage } from "@/pages/AutomationsPage"
 import { ChatPage } from "@/pages/ChatPage"
 import { ConversationsPage } from "@/pages/ConversationsPage"
 import { DebugPage } from "@/pages/DebugPage"
@@ -26,6 +27,7 @@ export function App() {
           }
         >
           <Route index element={<ChatPage />} />
+          <Route path="automations" element={<AutomationsPage />} />
           <Route path="c/:conversationId" element={<ChatPage />} />
           <Route path="conversations" element={<ConversationsPage />} />
           <Route path="debug" element={<DebugPage />} />

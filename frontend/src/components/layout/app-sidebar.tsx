@@ -273,9 +273,11 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton type="button">
-                  <IconRobot />
-                  <span>Automations</span>
+                <SidebarMenuButton asChild isActive={pathname === "/automations"} tooltip="Automations">
+                  <NavLink to="/automations">
+                    <IconRobot />
+                    <span>Automations</span>
+                  </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
