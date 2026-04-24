@@ -19,7 +19,7 @@ class DebugLlmModelOut(Schema):
     model_key: str
     api_key: str
     has_api_key: bool
-    quota: int
+    quota: int | None
     quota_used: int
     quota_expires_at: str | None
     context_message_limit: int

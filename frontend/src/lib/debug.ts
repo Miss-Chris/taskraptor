@@ -185,10 +185,6 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export async function fetchDebugSummary(): Promise<DebugSummary> {
-  return getJson<DebugSummary>("/api/debug/summary")
-}
-
 export async function fetchDebugConversations(): Promise<{
   conversations: DebugConversationListItem[]
   count: number
