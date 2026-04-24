@@ -32,6 +32,14 @@ export function useCreateChatConversationMutation() {
   return $api.useMutation("post", "/api/chat/conversations")
 }
 
+export function useStartChatConversationMutation() {
+  return $api.useMutation("post", "/api/chat/conversations/start")
+}
+
+export function useDeleteChatConversationMutation() {
+  return $api.useMutation("delete", "/api/chat/conversations/{conversation_id}")
+}
+
 export function useSendChatMessageMutation() {
   return $api.useMutation(
     "post",

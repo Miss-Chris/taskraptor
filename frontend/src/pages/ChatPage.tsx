@@ -15,10 +15,10 @@ import {
 import { cn } from "@/lib/utils"
 import {
   useChatConversationQuery,
-  useCreateChatConversationMutation,
   useSendChatMessageMutation,
+  useStartChatConversationMutation,
 } from "@/queries/chat"
-import { IconAlertTriangle, IconMessagePlus, IconSend, IconSparkles } from "@tabler/icons-react"
+import { IconAlertTriangle, IconMessagePlus, IconSend } from "@tabler/icons-react"
 
 const POLL_MS = 1500
 const INLINE_MARKDOWN_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
@@ -217,8 +217,8 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         className={cn(
           "max-w-[min(44rem,85%)] rounded-lg border px-4 py-3 text-sm leading-relaxed shadow-sm",
           isUser
-            ? "border-primary/20 bg-primary text-primary-foreground"
-            : "border-border bg-card text-card-foreground",
+            ? "border-border bg-muted text-foreground"
+            : "border-border bg-card/70 text-card-foreground",
         )}
       >
         {isUser ? (
@@ -229,7 +229,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         <time
           className={cn(
             "mt-2 block text-[0.7rem]",
-            isUser ? "text-primary-foreground/70" : "text-muted-foreground",
+            "text-muted-foreground",
           )}
         >
           {formatTime(message.created_at)}
@@ -250,16 +250,17 @@ export function ChatPage() {
   const [runError, setRunError] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const conversationQuery = useChatConversationQuery(conversationId)
-  const createChat = useCreateChatConversationMutation()
+  const startChat = useStartChatConversationMutation()
   const sendMessage = useSendChatMessageMutation()
-  const creating = createChat.isPending
+  const starting = startChat.isPending
   const sending = sendMessage.isPending
   const loading = Boolean(conversationId) && conversationQuery.isPending
 
   const latestRun = runs[0] ?? conversation?.latest_run ?? null
   const activeRun = isActiveRun(latestRun) ? latestRun : null
-  const canSend = input.trim().length > 0 && !sending && !creating
+  const canSend = input.trim().length > 0 && !sending && !starting
 
   const handleAuthError = useCallback(
     (message: string) => {
@@ -272,18 +273,6 @@ export function ChatPage() {
     },
     [navigate],
   )
-
-  const createConversation = useCallback(async () => {
-    setError(null)
-    try {
-      const next = await createChat.mutateAsync({ body: { title: "" } })
-      window.dispatchEvent(new Event("taskraptor:chat-updated"))
-      navigate(`/c/${next.id}`)
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to create conversation"
-      if (!handleAuthError(message)) setError(message)
-    }
-  }, [createChat, handleAuthError, navigate])
 
   useEffect(() => {
     if (!conversationId) {
@@ -330,6 +319,14 @@ export function ChatPage() {
   }, [messages.length, activeRun?.id])
 
   useEffect(() => {
+    if (loading) return
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [conversationId, loading])
+
+  useEffect(() => {
     if (!conversationId || !activeRun) return
 
     let cancelled = false
@@ -371,11 +368,24 @@ export function ChatPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const content = input.trim()
-    if (!conversationId || !content || sending) return
+    if (!content || sending || starting) return
 
     setError(null)
     setRunError(null)
     try {
+      if (!conversationId) {
+        const result = await startChat.mutateAsync({
+          body: { content },
+        })
+        setInput("")
+        setConversation(result.conversation)
+        setMessages([result.message])
+        setRuns([result.run])
+        window.dispatchEvent(new Event("taskraptor:chat-updated"))
+        navigate(`/c/${result.conversation.id}`)
+        return
+      }
+
       const result = await sendMessage.mutateAsync({
         params: { path: { conversation_id: conversationId } },
         body: { content },
@@ -384,6 +394,7 @@ export function ChatPage() {
       setMessages((current) => mergeMessages(current, [result.message]))
       setRuns((current) => mergeRun(current, result.run))
       window.dispatchEvent(new Event("taskraptor:chat-updated"))
+      textareaRef.current?.focus()
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to send message"
       if (!handleAuthError(message)) setError(message)
@@ -397,32 +408,11 @@ export function ChatPage() {
   }
 
   const headerDescription = useMemo(() => {
-    if (!conversation) return "Ask the agent to capture, update, and reason about your tasks."
+    if (!conversation) return "Draft"
     if (activeRun) return "Agent is working"
     if (messages.length === 0) return "No messages yet"
     return `${messages.length} message${messages.length === 1 ? "" : "s"}`
   }, [activeRun, conversation, messages.length])
-
-  if (!conversationId) {
-    return (
-      <div className="mx-auto flex min-h-[calc(100svh-8rem)] w-full max-w-2xl flex-col items-center justify-center gap-5 text-center">
-        <div className="bg-muted flex size-12 items-center justify-center rounded-lg border">
-          <IconSparkles className="text-muted-foreground size-6" />
-        </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">TaskRaptor chat</h1>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            Start a conversation with the agent to create tasks, adjust priorities, or plan what is next.
-          </p>
-        </div>
-        {error ? <p className="text-destructive text-sm">{error}</p> : null}
-        <Button type="button" onClick={createConversation} disabled={creating}>
-          <IconMessagePlus />
-          {creating ? "Creating..." : "New Chat"}
-        </Button>
-      </div>
-    )
-  }
 
   if (loading) {
     return (
@@ -442,9 +432,9 @@ export function ChatPage() {
             This conversation is unavailable or belongs to another account.
           </p>
         </div>
-        <Button type="button" onClick={createConversation} disabled={creating}>
+        <Button type="button" onClick={() => navigate("/")}>
           <IconMessagePlus />
-          {creating ? "Creating..." : "New Chat"}
+          New Chat
         </Button>
       </div>
     )
@@ -454,10 +444,12 @@ export function ChatPage() {
     <div className="mx-auto flex min-h-[calc(100svh-7rem)] w-full max-w-4xl flex-1 flex-col">
       <header className="border-border flex shrink-0 items-start justify-between gap-4 border-b pb-4">
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-semibold tracking-tight">{conversationTitle(conversation)}</h1>
+          <h1 className="truncate text-xl font-semibold tracking-tight">
+            {conversationId ? conversationTitle(conversation) : "TaskRaptor chat"}
+          </h1>
           <p className="text-muted-foreground mt-1 text-sm">{headerDescription}</p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={createConversation} disabled={creating}>
+        <Button type="button" variant="outline" size="sm" onClick={() => navigate("/")}>
           <IconMessagePlus />
           New Chat
         </Button>
@@ -467,7 +459,7 @@ export function ChatPage() {
         {messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-16 text-center">
             <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
-              Send the first message to start this conversation.
+              Send the first message to start a conversation.
             </p>
           </div>
         ) : (
@@ -492,13 +484,14 @@ export function ChatPage() {
         ) : null}
         <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleComposerKeyDown}
             rows={2}
             placeholder="Message TaskRaptor"
             className="border-input bg-background focus-visible:ring-ring min-h-12 flex-1 resize-none rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={sending || creating}
+            disabled={sending || starting}
           />
           <Button type="submit" size="icon" disabled={!canSend} aria-label="Send message">
             <IconSend />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
+import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog"
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +11,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -18,10 +20,7 @@ import {
 import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
 import { clearToken } from "@/lib/auth"
 import { type ChatConversation } from "@/lib/chat"
-import {
-  useChatConversationsQuery,
-  useCreateChatConversationMutation,
-} from "@/queries/chat"
+import { useChatConversationsQuery } from "@/queries/chat"
 import { useTaskFacetsQuery } from "@/queries/tasks"
 import type { TaskFacets } from "@/lib/tasks"
 import {
@@ -30,10 +29,12 @@ import {
   IconCheckbox,
   IconBug,
   IconLogout,
+  IconMessages,
   IconMessagePlus,
   IconRobot,
   IconSettings,
   IconTag,
+  IconTrash,
 } from "@tabler/icons-react"
 
 function getActiveConversationId(pathname: string): string | null {
@@ -55,21 +56,20 @@ export function AppSidebar() {
   const activeTag = searchParams.get("tag")
 
   const facetsQuery = useTaskFacetsQuery()
-  const conversationsQuery = useChatConversationsQuery(20)
-  const createChat = useCreateChatConversationMutation()
-  const [createChatError, setCreateChatError] = useState<string | null>(null)
+  const conversationsQuery = useChatConversationsQuery(6)
   const [tagsExpanded, setTagsExpanded] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ChatConversation | null>(null)
 
   const facets: TaskFacets | null = facetsQuery.data ?? null
-  const conversations: ChatConversation[] =
-    conversationsQuery.data?.conversations ?? []
+  const conversations: ChatConversation[] = conversationsQuery.data?.conversations.slice(0, 5) ?? []
+  const hasMoreConversations = (conversationsQuery.data?.count ?? 0) > 5
   const chatLoading = conversationsQuery.isLoading
   const chatLoadError = conversationsQuery.isError
     ? conversationsQuery.error instanceof Error
       ? conversationsQuery.error.message
       : "Could not load chats"
     : null
-  const chatError = createChatError ?? chatLoadError
+  const chatError = chatLoadError
 
   useEffect(() => {
     const err = facetsQuery.error
@@ -103,25 +103,13 @@ export function AppSidebar() {
     navigate("/login", { replace: true })
   }
 
-  async function handleNewChat() {
-    setCreateChatError(null)
-    try {
-      const conversation = await createChat.mutateAsync({ body: { title: "" } })
-      await conversationsQuery.refetch()
-      navigate(`/c/${conversation.id}`)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to create conversation"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      setCreateChatError(msg)
-    }
+  function handleNewChat() {
+    navigate("/")
   }
 
   const allTasksActive = pathname === "/tasks" && !activeTag
   const upcomingActive = pathname === "/tasks/upcoming"
+  const conversationsActive = pathname === "/conversations"
   const activeConversationId = getActiveConversationId(pathname)
   const tagCounts = facets?.tag_counts ?? []
   const visibleTagCounts = tagCounts.slice(0, tagsExpanded ? 10 : 5)
@@ -137,7 +125,7 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="py-2">
           <SidebarGroupLabel>Chat</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -145,17 +133,14 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   type="button"
                   onClick={handleNewChat}
-                  disabled={createChat.isPending}
+                  isActive={pathname === "/" && !activeConversationId}
                 >
                   <IconMessagePlus />
-                  <span>{createChat.isPending ? "Creating..." : "New Chat"}</span>
+                  <span>New Chat</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <p className="text-muted-foreground px-3 pt-2 text-xs font-medium">
-              Recent conversations
-            </p>
-            <SidebarMenu className="mt-1">
+            <SidebarMenu className="mt-0.5">
               {chatLoading ? (
                 <SidebarMenuItem>
                   <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
@@ -174,12 +159,20 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       asChild
                       size="sm"
+                      className="pr-8"
                       isActive={activeConversationId === conversation.id}
                     >
                       <NavLink to={`/c/${conversation.id}`}>
                         <span className="truncate">{getConversationLabel(conversation)}</span>
                       </NavLink>
                     </SidebarMenuButton>
+                    <SidebarMenuAction
+                      type="button"
+                      aria-label="Delete conversation"
+                      onClick={() => setDeleteTarget(conversation)}
+                    >
+                      <IconTrash />
+                    </SidebarMenuAction>
                   </SidebarMenuItem>
                 ))
               ) : (
@@ -189,6 +182,16 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              {hasMoreConversations ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild size="sm" isActive={conversationsActive}>
+                    <NavLink to="/conversations">
+                      <IconMessages className="size-3.5" />
+                      <span>All Conversations</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -323,6 +326,20 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <DeleteConversationDialog
+        conversation={deleteTarget}
+        open={deleteTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        onDeleted={(conversationId) => {
+          void conversationsQuery.refetch()
+          if (conversationId === activeConversationId) {
+            navigate("/", { replace: true })
+          }
+        }}
+        onAuthExpired={() => navigate("/login", { replace: true })}
+      />
     </Sidebar>
   )
 }

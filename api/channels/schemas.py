@@ -19,6 +19,10 @@ class ChatConversationCreateIn(Schema):
     title: str = ""
 
 
+class ChatConversationStartIn(Schema):
+    content: str
+
+
 class ChatConversationUpdateIn(Schema):
     title: str
 
@@ -72,5 +76,11 @@ class ChatMessagesOut(Schema):
 
 
 class ChatSendMessageOut(Schema):
+    message: ChatMessageOut
+    run: ChatRunOut
+
+
+class ChatStartConversationOut(Schema):
+    conversation: ChatConversationOut
     message: ChatMessageOut
     run: ChatRunOut

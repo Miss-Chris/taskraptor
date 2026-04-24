@@ -59,6 +59,7 @@ class Conversation(models.Model):
     )
     external_id = models.CharField(max_length=255, blank=True)
     title = models.CharField(max_length=255, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, default=None)
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

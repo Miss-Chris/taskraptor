@@ -12,6 +12,7 @@ from channels.web import get_or_create_default_web_channel, process_next_pending
 
 REGISTER_URL = "/api/auth/register"
 CONVERSATIONS_URL = "/api/chat/conversations"
+START_CONVERSATION_URL = "/api/chat/conversations/start"
 
 
 @pytest.fixture
@@ -69,6 +70,162 @@ def test_conversation_create_list_detail_are_scoped_to_user(client):
         **_auth(other_token),
     )
     assert other_detail.status_code == 404
+
+
+@pytest.mark.django_db
+def test_list_conversations_count_reports_total_active_rows(client):
+    token = _register_and_token(client, "chat-count@example.com")
+    for index in range(3):
+        response = client.post(
+            CONVERSATIONS_URL,
+            data={"title": f"Chat {index}"},
+            content_type="application/json",
+            **_auth(token),
+        )
+        assert response.status_code == 201
+
+    response = client.get(f"{CONVERSATIONS_URL}?limit=2", **_auth(token))
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] == 3
+    assert len(data["conversations"]) == 2
+
+
+@pytest.mark.django_db
+def test_recently_touched_conversation_orders_first(client):
+    token = _register_and_token(client, "chat-ordering@example.com")
+    first_response = client.post(
+        CONVERSATIONS_URL,
+        data={"title": "First"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    second_response = client.post(
+        CONVERSATIONS_URL,
+        data={"title": "Second"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    first_id = first_response.json()["id"]
+    second_id = second_response.json()["id"]
+
+    Conversation.objects.filter(pk=first_id).update(updated_at=timezone.now())
+
+    response = client.get(CONVERSATIONS_URL, **_auth(token))
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["conversations"]] == [first_id, second_id]
+
+
+@pytest.mark.django_db
+def test_start_chat_creates_conversation_from_first_message(client, monkeypatch):
+    token = _register_and_token(client, "chat-start@example.com")
+    delay_calls: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.web_api.process_web_message.delay",
+        lambda conversation_id, message_id, agent_run_id: delay_calls.append(
+            (conversation_id, message_id, agent_run_id)
+        ),
+    )
+
+    response = client.post(
+        START_CONVERSATION_URL,
+        data={"content": "  Create a launch checklist  "},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 202
+    data = response.json()
+    conversation = data["conversation"]
+    message = data["message"]
+    run = data["run"]
+    assert Conversation.objects.count() == 1
+    assert conversation["title"] == "Create a launch checklist"
+    assert message["content"] == "Create a launch checklist"
+    assert message["conversation_id"] == conversation["id"]
+    assert run["conversation_id"] == conversation["id"]
+    assert run["status"] == AgentRunStatus.PENDING
+    assert delay_calls == [(conversation["id"], message["id"], run["id"])]
+
+
+@pytest.mark.django_db
+def test_start_chat_rejects_blank_without_creating_conversation(client):
+    token = _register_and_token(client, "chat-start-blank@example.com")
+
+    response = client.post(
+        START_CONVERSATION_URL,
+        data={"content": "   "},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 400
+    assert Conversation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_delete_conversation_is_soft_delete_and_user_scoped(client):
+    token = _register_and_token(client, "chat-delete@example.com")
+    other_token = _register_and_token(client, "chat-delete-other@example.com")
+    create_response = client.post(
+        CONVERSATIONS_URL,
+        data={"title": "Delete me"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    conversation_id = create_response.json()["id"]
+
+    other_response = client.delete(
+        f"{CONVERSATIONS_URL}/{conversation_id}",
+        **_auth(other_token),
+    )
+    assert other_response.status_code == 404
+
+    response = client.delete(
+        f"{CONVERSATIONS_URL}/{conversation_id}",
+        **_auth(token),
+    )
+
+    assert response.status_code == 204
+    conversation = Conversation.objects.get(pk=conversation_id)
+    assert conversation.deleted_at is not None
+    assert Conversation.objects.filter(pk=conversation_id).exists()
+
+
+@pytest.mark.django_db
+def test_soft_deleted_conversations_are_hidden_from_chat_api(client):
+    token = _register_and_token(client, "chat-hidden@example.com")
+    create_response = client.post(
+        CONVERSATIONS_URL,
+        data={"title": "Hidden"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    conversation_id = create_response.json()["id"]
+    Conversation.objects.filter(pk=conversation_id).update(deleted_at=timezone.now())
+
+    list_response = client.get(CONVERSATIONS_URL, **_auth(token))
+    detail_response = client.get(f"{CONVERSATIONS_URL}/{conversation_id}", **_auth(token))
+    messages_response = client.get(
+        f"{CONVERSATIONS_URL}/{conversation_id}/messages",
+        **_auth(token),
+    )
+    send_response = client.post(
+        f"{CONVERSATIONS_URL}/{conversation_id}/messages",
+        data={"content": "hello"},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json()["conversations"] == []
+    assert list_response.json()["count"] == 0
+    assert detail_response.status_code == 404
+    assert messages_response.status_code == 404
+    assert send_response.status_code == 404
 
 
 @pytest.mark.django_db

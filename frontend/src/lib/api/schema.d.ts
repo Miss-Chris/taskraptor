@@ -90,6 +90,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/conversations/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Chat Conversation */
+        post: operations["channels_web_api_start_chat_conversation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -101,7 +118,8 @@ export interface paths {
         get: operations["channels_web_api_get_chat_conversation"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Chat Conversation */
+        delete: operations["channels_web_api_delete_chat_conversation"];
         options?: never;
         head?: never;
         /** Update Chat Conversation */
@@ -474,6 +492,17 @@ export interface components {
              * @default
              */
             title: string;
+        };
+        /** ChatStartConversationOut */
+        ChatStartConversationOut: {
+            conversation: components["schemas"]["ChatConversationOut"];
+            message: components["schemas"]["ChatMessageOut"];
+            run: components["schemas"]["ChatRunOut"];
+        };
+        /** ChatConversationStartIn */
+        ChatConversationStartIn: {
+            /** Content */
+            content: string;
         };
         /** ChatConversationDetailOut */
         ChatConversationDetailOut: {
@@ -1163,6 +1192,57 @@ export interface operations {
             };
         };
     };
+    channels_web_api_start_chat_conversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatConversationStartIn"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatStartConversationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     channels_web_api_get_chat_conversation: {
         parameters: {
             query?: {
@@ -1185,6 +1265,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ChatConversationDetailOut"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    channels_web_api_delete_chat_conversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

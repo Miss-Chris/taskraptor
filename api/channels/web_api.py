@@ -5,6 +5,7 @@ from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet
+from django.utils import timezone
 from ninja import Router, Status
 
 from accounts.bearer import AuthBearer
@@ -17,12 +18,14 @@ from channels.schemas import (
     ChatConversationDetailOut,
     ChatConversationListOut,
     ChatConversationOut,
+    ChatConversationStartIn,
     ChatConversationUpdateIn,
     ChatMessageCreateIn,
     ChatMessageOut,
     ChatMessagesOut,
     ChatRunOut,
     ChatSendMessageOut,
+    ChatStartConversationOut,
 )
 from channels.tasks import process_web_message
 from channels.web import (
@@ -47,6 +50,7 @@ def _conversation_queryset(user) -> QuerySet[Conversation]:
     return Conversation.objects.filter(
         channel__user=user,
         channel__type=ChannelType.WEB,
+        deleted_at__isnull=True,
     ).select_related("channel")
 
 
@@ -137,15 +141,15 @@ def _recent_runs(conversation: Conversation, limit: int = 20) -> list[ChatRunOut
 )
 def list_chat_conversations(request: AuthedHttpRequest, limit: int = 50):
     get_or_create_default_web_channel(request.auth)
+    qs = _conversation_queryset(request.auth).order_by("-updated_at", "-created_at")
     conversations = list(
-        _conversation_queryset(request.auth)
-        .order_by("-updated_at", "-created_at")[: _safe_limit(limit)]
+        qs[: _safe_limit(limit)]
     )
     return Status(
         200,
         ChatConversationListOut(
             conversations=[_to_conversation_out(conversation) for conversation in conversations],
-            count=len(conversations),
+            count=qs.count(),
         ),
     )
 
@@ -161,6 +165,44 @@ def create_chat_conversation(request: AuthedHttpRequest, payload: ChatConversati
         return Status(400, {"detail": "Title must be 255 characters or fewer."})
     conversation = create_web_conversation(channel, title=title)
     return Status(201, _to_conversation_out(conversation))
+
+
+@router.post(
+    "/conversations/start",
+    response={202: ChatStartConversationOut, 400: ErrorOut, 401: ErrorOut, 500: ErrorOut},
+)
+def start_chat_conversation(request: AuthedHttpRequest, payload: ChatConversationStartIn):
+    content = payload.content.strip()
+    if not content:
+        return Status(400, {"detail": "Message content cannot be blank."})
+
+    channel = get_or_create_default_web_channel(request.auth)
+    conversation = create_web_conversation(channel, title=content[:255])
+    message, run = queue_web_user_message(conversation, content)
+    try:
+        process_web_message.delay(str(conversation.pk), str(message.pk), str(run.pk))
+    except Exception as exc:
+        logger.exception(
+            "web chat: failed to enqueue initial message conversation_id=%s run_id=%s",
+            conversation.pk,
+            run.pk,
+        )
+        run.status = AgentRunStatus.FAILED
+        run.error = f"Enqueue failed: {exc}"
+        run.save(update_fields=["status", "error"])
+        return Status(500, {"detail": "Failed to enqueue message."})
+
+    run.refresh_from_db()
+    message.refresh_from_db()
+    conversation.refresh_from_db()
+    return Status(
+        202,
+        ChatStartConversationOut(
+            conversation=_to_conversation_out(conversation),
+            message=_to_message_out(message),
+            run=_to_run_out(run),
+        ),
+    )
 
 
 @router.get(
@@ -209,6 +251,21 @@ def update_chat_conversation(
     conversation.title = title
     conversation.save(update_fields=["title", "updated_at"])
     return Status(200, _to_conversation_out(conversation))
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    response={204: None, 401: ErrorOut, 404: ErrorOut},
+)
+def delete_chat_conversation(request: AuthedHttpRequest, conversation_id: UUID):
+    try:
+        conversation = _get_conversation(request.auth, conversation_id)
+    except ObjectDoesNotExist:
+        return Status(404, {"detail": "Not found."})
+
+    conversation.deleted_at = timezone.now()
+    conversation.save(update_fields=["deleted_at", "updated_at"])
+    return Status(204, None)
 
 
 @router.get(
