@@ -13,6 +13,7 @@ Set WORKFLOW_AUDIT=1 to print every NewMessage and ToolCallRecord per turn
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
 import os
 
@@ -21,7 +22,7 @@ import pytest
 from agent.models import AgentRun, AgentRunStatus, MessageLog
 from agent.schemas import AgentResult
 from channels.workflow import handle_user_incoming
-from tasks.models import Task
+from tasks.models import DueType, Task
 
 
 def _audit_turn(turn_idx: int, user_text: str, result: AgentResult) -> None:
@@ -52,6 +53,44 @@ def _audit_turn(turn_idx: int, user_text: str, result: AgentResult) -> None:
             f"        result: {res_preview!r}"
         )
     print(f"{'=' * 72}\n")
+
+
+@pytest.mark.live_api
+@pytest.mark.django_db
+def test_workflow_interprets_tomorrow_in_user_timezone(
+    monkeypatch,
+    test_user,
+    test_llm_model,
+    test_conversation,
+):
+    """
+    Workflow prompt should give the model enough local-time context for relative dates.
+
+    The frozen instant is 2026-04-10 06:30 UTC, which is still 2026-04-09 in
+    America/Los_Angeles. "Tomorrow" should therefore become 2026-04-10 local.
+    """
+    test_user.timezone = "America/Los_Angeles"
+    test_user.save(update_fields=["timezone"])
+    frozen_now = datetime(2026, 4, 10, 6, 30, tzinfo=UTC)
+    monkeypatch.setattr("channels.workflow.timezone.now", lambda: frozen_now)
+
+    user_text = "Create a task called 'Submit LA permit' due tomorrow with no specific time."
+    result = handle_user_incoming(test_conversation, user_text)
+
+    if os.environ.get("WORKFLOW_AUDIT") == "1":
+        _audit_turn(1, user_text, result)
+
+    assert result.error is None
+    create_calls = [
+        msg
+        for msg in result.new_messages
+        if msg.actor == "tool_call" and msg.tool_name == "create_task"
+    ]
+    assert create_calls, "Expected a create_task tool call"
+
+    task = Task.objects.get(user=test_user, name__icontains="LA permit")
+    assert task.due_type == DueType.DATE
+    assert task.due_at == datetime(2026, 4, 11, 6, 59, 59, 999999, tzinfo=UTC)
 
 
 @pytest.mark.live_api

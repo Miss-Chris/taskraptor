@@ -10,6 +10,8 @@ They require TEST_ANTHROPIC_API_KEY to be set in the environment or .env.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from agent.run import run_agent
@@ -20,6 +22,7 @@ from agent.schemas import (
     ToolResultMessage,
     UserMessage,
 )
+from tasks.models import DueType, Task
 
 
 def _new_messages_to_history(new_messages: list[NewMessage]) -> list[HistoryMessage]:
@@ -111,6 +114,36 @@ def test_create_task(test_user, test_llm_model):
     assert "Buy milk" in (name_arg.get("name") or "")
 
     assert result.response_text, "Expected a non-empty final response"
+
+
+@pytest.mark.live_api
+@pytest.mark.django_db
+def test_create_task_with_local_due_datetime(test_user, test_llm_model):
+    """Agent should preserve an explicit local due time through UTC storage."""
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+
+    result = run_agent(
+        user_id=test_user.pk,
+        llm_model=test_llm_model,
+        history=[],
+        new_message=(
+            "Create a task called 'Call the Toronto accountant' due on "
+            "April 10, 2026 at exactly 9:30 AM in my local timezone."
+        ),
+    )
+
+    assert result.error is None
+    create_calls = [
+        msg
+        for msg in result.new_messages
+        if msg.actor == "tool_call" and msg.tool_name == "create_task"
+    ]
+    assert create_calls, "Expected a create_task tool call"
+
+    task = Task.objects.get(user=test_user, name__icontains="Toronto accountant")
+    assert task.due_type == DueType.TIME
+    assert task.due_at == datetime(2026, 4, 10, 13, 30, tzinfo=UTC)
 
 
 @pytest.mark.live_api
