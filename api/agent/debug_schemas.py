@@ -166,8 +166,6 @@ class DebugTaskAuditLogOut(Schema):
 
 class DebugAutomationOut(Schema):
     id: str
-    channel_id: str
-    channel_type: str
     prompt: str
     schedule_time: str | None
     is_active: bool

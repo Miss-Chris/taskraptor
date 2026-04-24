@@ -60,7 +60,6 @@ def debug_conversation(debug_user):
     task = Task.objects.create(user=debug_user, name="Original task")
     Automation.objects.create(
         user=debug_user,
-        channel=channel,
         prompt="Summarize my day",
         schedule_time=time(9, 30),
     )

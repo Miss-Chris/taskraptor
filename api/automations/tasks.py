@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from automations.models import Automation
-from channels.workflow import handle_system_message
+from automations.services import run_automation_on_active_channels
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def dispatch_due_automations() -> int:
 
     automations = (
         Automation.objects.filter(is_active=True)
-        .select_related("user", "channel")
+        .select_related("user")
         .iterator()
     )
     for automation in automations:
@@ -65,7 +65,7 @@ def run_automation(automation_id: str | UUID) -> bool:
     with transaction.atomic():
         automation = (
             Automation.objects.select_for_update()
-            .select_related("user", "channel")
+            .select_related("user")
             .filter(pk=automation_id, is_active=True)
             .first()
         )
@@ -76,9 +76,11 @@ def run_automation(automation_id: str | UUID) -> bool:
         if not automation_is_due(automation, now=now):
             return False
 
-        # Keep the due-check and last_run_at write under the same row lock so
-        # overlapping beat ticks do not double-run the same automation.
-        handle_system_message(automation.channel, automation.prompt)
+        # Keep the due-check, fan-out, and last_run_at write under the same row
+        # lock so overlapping beat ticks do not double-run the same automation.
+        # TODO: long agent runs hold this lock; a later claim/complete state
+        # should release the transaction before executing channel fan-out.
+        run_automation_on_active_channels(automation)
         automation.last_run_at = now
         automation.save(update_fields=["last_run_at", "updated_at"])
 

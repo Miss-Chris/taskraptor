@@ -160,7 +160,6 @@ def conversation_debug_bundle(
         "automations": [
             _automation_summary(automation)
             for automation in Automation.objects.filter(user=user, is_active=True)
-            .select_related("channel")
             .order_by("-created_at")
         ],
         "llm_models": [
@@ -256,8 +255,8 @@ def render_debug_markdown(bundle: dict[str, Any]) -> str:
     lines.append("## Automations")
     for automation in bundle["automations"]:
         lines.append(
-            f"- id=`{automation['id']}` channel=`{automation['channel_id']}` "
-            f"active={automation['is_active']} schedule_time={automation['schedule_time']} "
+            f"- id=`{automation['id']}` active={automation['is_active']} "
+            f"schedule_time={automation['schedule_time']} "
             f"last_run_at={automation['last_run_at']} prompt={automation['prompt']!r}"
         )
     if not bundle["automations"]:
@@ -410,8 +409,6 @@ def _task_audit_summary(log: TaskAuditLog) -> dict[str, Any]:
 def _automation_summary(automation: Automation) -> dict[str, Any]:
     return {
         "id": str(automation.pk),
-        "channel_id": str(automation.channel_id),
-        "channel_type": automation.channel.type,
         "prompt": automation.prompt,
         "schedule_time": _serialize(automation.schedule_time),
         "is_active": automation.is_active,

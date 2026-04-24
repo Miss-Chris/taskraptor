@@ -11,11 +11,6 @@ class Automation(models.Model):
         on_delete=models.CASCADE,
         related_name="automations",
     )
-    channel = models.ForeignKey(
-        "channels.Channel",
-        on_delete=models.CASCADE,
-        related_name="automations",
-    )
     prompt = models.TextField(
         help_text=(
             "The prompt to send as a system message, e.g. 'List my top 5 important tasks'."
@@ -37,7 +32,6 @@ class Automation(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "is_active"]),
-            models.Index(fields=["channel"]),
         ]
 
     def __str__(self) -> str:
