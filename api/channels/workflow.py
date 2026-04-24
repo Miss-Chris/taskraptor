@@ -132,11 +132,19 @@ def handle_user_incoming(
     agent_run.save(update_fields=["status", "error", "completed_at"])
 
     runtime_conv = get_conversation(channel.pk, conversation.pk)
+    delivered = False
     for msg in result.new_messages:
         if msg.actor == "tool_call" and msg.tool_name == "respond_to_user":
             text = (msg.arguments or {}).get("message", "")
             if text:
                 runtime_conv.send_message(text, agent_run=agent_run)
+                delivered = True
+
+    if not delivered:
+        for msg in reversed(result.new_messages):
+            if msg.actor == "assistant" and msg.content:
+                runtime_conv.send_message(msg.content, agent_run=agent_run)
+                break
 
     logger.info(
         "[workflow] handle_user_incoming conversation_id=%s agent_run_id=%s status=%s iterations=%s",

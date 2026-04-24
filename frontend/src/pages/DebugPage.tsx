@@ -13,7 +13,7 @@ import {
   type DebugMessageLog,
 } from "@/lib/debug"
 import { cn } from "@/lib/utils"
-import { IconAlertTriangle, IconBug, IconDatabase, IconRefresh } from "@tabler/icons-react"
+import { IconAlertTriangle, IconBug, IconCheck, IconCopy, IconDatabase, IconRefresh } from "@tabler/icons-react"
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "-"
@@ -63,6 +63,34 @@ function logRowClass(actor: string): string {
   return "border-l-4 border-l-transparent bg-muted/20"
 }
 
+function CopyIdButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => {
+        setCopied(false)
+      }, 1500)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="text-muted-foreground hover:text-foreground size-7 shrink-0"
+      onClick={handleCopy}
+      title={label}
+      aria-label={label}
+    >
+      {copied ? <IconCheck className="text-emerald-600 size-3.5" /> : <IconCopy className="size-3.5" />}
+    </Button>
+  )
+}
+
 function RunTimeline({ runs }: { runs: DebugAgentRun[] }) {
   if (runs.length === 0) {
     return <p className="text-muted-foreground text-sm">No agent runs recorded.</p>
@@ -71,9 +99,10 @@ function RunTimeline({ runs }: { runs: DebugAgentRun[] }) {
     <div className="space-y-2">
       {runs.map((run) => (
         <div key={run.id} className="rounded-md border p-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1">
             <StatusPill status={run.status} />
-            <span className="font-mono text-xs">{run.id}</span>
+            <span className="min-w-0 break-all font-mono text-xs">{run.id}</span>
+            <CopyIdButton value={run.id} label="Copy agent run ID" />
           </div>
           <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
             <div>
@@ -190,7 +219,10 @@ function DetailView({ bundle }: { bundle: DebugConversationBundle }) {
           <dl className="grid gap-3 text-xs sm:grid-cols-2">
             <div>
               <dt className="text-muted-foreground">Conversation</dt>
-              <dd className="mt-0.5 break-all font-mono">{bundle.conversation.id}</dd>
+              <dd className="mt-0.5 flex items-start gap-0.5">
+                <span className="min-w-0 break-all font-mono">{bundle.conversation.id}</span>
+                <CopyIdButton value={bundle.conversation.id} label="Copy conversation ID" />
+              </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">User</dt>

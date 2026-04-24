@@ -176,6 +176,36 @@ def test_agent_run_marked_failed_on_script_exhausted(
 
 
 @pytest.mark.django_db
+def test_workflow_delivers_plain_assistant_fallback(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+    test_conversation,
+):
+    """
+    Some models complete a turn by returning plain assistant text after a tool
+    call instead of calling respond_to_user. The workflow should still deliver
+    that final assistant text to the channel.
+    """
+    DummyConversation._sent.clear()
+
+    result = handle_user_incoming(
+        test_conversation,
+        "Add a task to buy milk",
+        llm_callable=ScriptedLlm([
+            tool_call_response("create_task", {"name": "Buy milk"}),
+            text_response("Done! I've added Buy milk to your tasks."),
+        ]),
+    )
+
+    assert result.error is None
+    assert result.response_text == "Done! I've added Buy milk to your tasks."
+    assert DummyConversation._sent.get(test_conversation.pk) == [
+        "Done! I've added Buy milk to your tasks."
+    ]
+
+
+@pytest.mark.django_db
 def test_handle_system_message_creates_conversation_and_runs_agent(
     test_user,
     test_llm_model_offline,
