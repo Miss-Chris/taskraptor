@@ -5,6 +5,9 @@ import { AppShell } from "@/components/layout/AppShell"
 import { HomePage } from "@/pages/HomePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { RegisterPage } from "@/pages/RegisterPage"
+import { TaskDetailPage } from "@/pages/TaskDetailPage"
+import { TasksPage } from "@/pages/TasksPage"
+import { UpcomingTasksPage } from "@/pages/UpcomingTasksPage"
 
 export function App() {
   return (
@@ -21,6 +24,9 @@ export function App() {
           }
         >
           <Route index element={<HomePage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/upcoming" element={<UpcomingTasksPage />} />
+          <Route path="tasks/:taskId" element={<TaskDetailPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
