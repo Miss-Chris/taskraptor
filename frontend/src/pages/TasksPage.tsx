@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { IconChevronRight, IconListDetails } from "@tabler/icons-react"
 
@@ -6,13 +6,12 @@ import { TaskList } from "@/components/tasks/TaskList"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { Skeleton } from "@/components/ui/skeleton"
 import { clearToken } from "@/lib/auth"
+import { type Task, type TaskAuditLog } from "@/lib/tasks"
 import {
-  fetchTask,
-  fetchTaskAuditLogs,
-  fetchTasks,
-  type Task,
-  type TaskAuditLog,
-} from "@/lib/tasks"
+  useTaskAuditLogsQuery,
+  useTaskQuery,
+  useTasksQuery,
+} from "@/queries/tasks"
 import { cn } from "@/lib/utils"
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -66,24 +65,26 @@ function DetailRow({
   )
 }
 
-const STATUS_LABEL: Record<Task["status"], string> = {
+const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
   in_progress: "In progress",
   completed: "Completed",
   cancelled: "Cancelled",
 }
 
-const STATUS_DOT_CLASS: Record<Task["status"], string> = {
+const STATUS_DOT_CLASS: Record<string, string> = {
   pending: "bg-amber-400",
   in_progress: "bg-sky-400",
   completed: "bg-emerald-400",
   cancelled: "bg-muted-foreground",
 }
 
-function TaskStatusIndicator({ status }: { status: Task["status"] }) {
+function TaskStatusIndicator({ status }: { status: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-      <span className={cn("size-2 rounded-full", STATUS_DOT_CLASS[status])} />
+      <span
+        className={cn("size-2 rounded-full", STATUS_DOT_CLASS[status] ?? "bg-muted-foreground")}
+      />
       {STATUS_LABEL[status] ?? status.replace(/_/g, " ")}
     </span>
   )
@@ -118,13 +119,24 @@ export function TasksPage() {
   const status = searchParams.get("status") ?? ""
   const requestedTaskId = searchParams.get("task")
 
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [tasksLoading, setTasksLoading] = useState(true)
-  const [tasksError, setTasksError] = useState<string | null>(null)
-  const [taskDetail, setTaskDetail] = useState<Task | null>(null)
-  const [history, setHistory] = useState<TaskAuditLog[]>([])
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  const listParams = useMemo(
+    () => ({
+      tag: tag.trim() || undefined,
+      status: status.trim() || undefined,
+    }),
+    [tag, status]
+  )
+  const tasksQuery = useTasksQuery(listParams)
+  const tasks = useMemo(
+    () => tasksQuery.data?.tasks ?? [],
+    [tasksQuery.data]
+  )
+  const tasksLoading = tasksQuery.isLoading
+  const tasksError = tasksQuery.isError
+    ? tasksQuery.error instanceof Error
+      ? tasksQuery.error.message
+      : "Failed to load tasks"
+    : null
 
   const selectedTaskId = useMemo(() => {
     if (requestedTaskId && tasks.some((task) => task.id === requestedTaskId)) {
@@ -133,85 +145,41 @@ export function TasksPage() {
     return tasks[0]?.id ?? null
   }, [requestedTaskId, tasks])
 
+  const taskQuery = useTaskQuery(selectedTaskId ?? undefined)
+  const auditQuery = useTaskAuditLogsQuery(selectedTaskId ?? undefined)
+
   const selectedListTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks]
   )
-  const selectedTask = taskDetail ?? selectedListTask
-
-  const handleSessionError = useCallback(
-    (msg: string) => {
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return true
-      }
-      return false
-    },
-    [navigate]
-  )
-
-  const loadTasks = useCallback(async () => {
-    setTasksLoading(true)
-    setTasksError(null)
-    try {
-      const res = await fetchTasks({
-        tag: tag.trim() || undefined,
-        status: status.trim() || undefined,
-      })
-      setTasks(res.tasks)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load tasks"
-      if (handleSessionError(msg)) return
-      setTasksError(msg)
-      setTasks([])
-    } finally {
-      setTasksLoading(false)
+  const selectedTask = taskQuery.data ?? selectedListTask
+  const history = auditQuery.data?.audit_logs ?? []
+  const detailError = useMemo(() => {
+    if (taskQuery.isError) {
+      const m = taskQuery.error instanceof Error ? taskQuery.error.message : "Error"
+      return m === "NOT_FOUND" ? "Task not found." : m
     }
-  }, [handleSessionError, status, tag])
+    if (auditQuery.isError) {
+      return auditQuery.error instanceof Error
+        ? auditQuery.error.message
+        : "Failed to load history"
+    }
+    return null
+  }, [taskQuery.isError, taskQuery.error, auditQuery.isError, auditQuery.error])
+
+  const detailLoading =
+    Boolean(selectedTaskId) &&
+    (taskQuery.isPending || auditQuery.isPending) &&
+    !taskQuery.isError &&
+    !auditQuery.isError
 
   useEffect(() => {
-    void loadTasks()
-  }, [loadTasks])
-
-  useEffect(() => {
-    if (!selectedTaskId) {
-      setTaskDetail(null)
-      setHistory([])
-      setDetailError(null)
-      setDetailLoading(false)
-      return
+    const err = tasksQuery.error ?? taskQuery.error ?? auditQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      clearToken()
+      navigate("/login", { replace: true })
     }
-
-    let cancelled = false
-    setDetailLoading(true)
-    setDetailError(null)
-    setTaskDetail(null)
-    setHistory([])
-    ;(async () => {
-      try {
-        const [task, auditResponse] = await Promise.all([
-          fetchTask(selectedTaskId),
-          fetchTaskAuditLogs(selectedTaskId),
-        ])
-        if (cancelled) return
-        setTaskDetail(task)
-        setHistory(auditResponse.audit_logs)
-      } catch (e) {
-        if (cancelled) return
-        const msg =
-          e instanceof Error ? e.message : "Failed to load task details"
-        if (handleSessionError(msg)) return
-        setDetailError(msg === "NOT_FOUND" ? "Task not found." : msg)
-      } finally {
-        if (!cancelled) setDetailLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [handleSessionError, selectedTaskId])
+  }, [tasksQuery.error, taskQuery.error, auditQuery.error, navigate])
 
   function updateFilters(next: {
     status?: string

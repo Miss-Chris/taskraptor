@@ -1,55 +1,15 @@
-import { getToken } from "@/lib/auth"
+import { fetchClient } from "@/lib/api/client"
+import type { components, operations } from "@/lib/api/schema"
 
+export type Task = components["schemas"]["TaskOut"]
 export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled"
 
-export type Task = {
-  id: string
-  name: string
-  status: TaskStatus
-  priority: number
-  due_at: string | null
-  due_type: "date" | "time"
-  tags: string[]
-  remind_at: string | null
-  completed_at: string | null
-  archived_at: string | null
-  created_at: string
-}
-
-export type TaskAuditLog = {
-  id: string
-  task_id: string
-  created_at: string
-  action: string
-  old_value: unknown
-  new_value: unknown
-  actor_id: string | null
-}
-
-export type TaskListResponse = {
-  tasks: Task[]
-  count: number
-}
-
-export type TaskAuditLogListResponse = {
-  audit_logs: TaskAuditLog[]
-}
-
-export type StatusCountItem = {
-  status: string
-  count: number
-}
-
-export type TagCountItem = {
-  tag: string
-  count: number
-}
-
-export type TaskFacets = {
-  status_counts: StatusCountItem[]
-  tag_counts: TagCountItem[]
-  total: number
-}
+export type TaskAuditLog = components["schemas"]["TaskAuditLogOut"]
+export type TaskListResponse = components["schemas"]["TaskListOut"]
+export type TaskAuditLogListResponse = components["schemas"]["TaskAuditLogListOut"]
+export type StatusCountItem = components["schemas"]["StatusCountItem"]
+export type TagCountItem = components["schemas"]["TagCountItem"]
+export type TaskFacets = components["schemas"]["TaskFacetsOut"]
 
 export type ListTasksParams = {
   status?: string
@@ -60,111 +20,70 @@ export type ListTasksParams = {
   max_priority?: number
 }
 
-function authHeaders(): HeadersInit {
-  const token = getToken()
-  if (!token) {
-    throw new Error("Not authenticated")
+function requireData<T>(data: T | undefined): T {
+  if (data === undefined || data === null) {
+    throw new Error("Request failed")
   }
-  return { Authorization: `Bearer ${token}` }
+  return data
 }
 
-async function parseErrorDetail(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { detail?: unknown }
-    if (typeof data.detail === "string") return data.detail
-  } catch {
-    /* ignore */
-  }
-  return res.statusText || "Request failed"
-}
-
-function buildListQuery(params: ListTasksParams): string {
-  const sp = new URLSearchParams()
+export function toListTasksQuery(
+  params: ListTasksParams
+): NonNullable<operations["tasks_api_list_tasks"]["parameters"]["query"]> {
+  const q: NonNullable<operations["tasks_api_list_tasks"]["parameters"]["query"]> = {}
   if (params.status !== undefined && params.status !== "") {
-    sp.set("status", params.status)
+    q.status = params.status
   }
   if (params.tag !== undefined && params.tag !== "") {
-    sp.set("tag", params.tag)
+    q.tag = params.tag
   }
   if (params.upcoming === true) {
-    sp.set("upcoming", "true")
+    q.upcoming = true
   }
   if (params.priority !== undefined) {
-    sp.set("priority", String(params.priority))
+    q.priority = params.priority
   }
   if (params.min_priority !== undefined) {
-    sp.set("min_priority", String(params.min_priority))
+    q.min_priority = params.min_priority
   }
   if (params.max_priority !== undefined) {
-    sp.set("max_priority", String(params.max_priority))
+    q.max_priority = params.max_priority
   }
-  const q = sp.toString()
-  return q ? `?${q}` : ""
+  return q
 }
 
 export async function fetchTaskFacets(): Promise<TaskFacets> {
-  const res = await fetch("/api/tasks/facets", {
-    headers: { ...authHeaders() },
-  })
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<TaskFacets>
+  const { data } = await fetchClient.GET("/api/tasks/facets", {})
+  return requireData(data)
 }
 
 export async function fetchTasks(
   params: ListTasksParams = {}
 ): Promise<TaskListResponse> {
-  const res = await fetch(`/api/tasks/${buildListQuery(params)}`, {
-    headers: { ...authHeaders() },
+  const query = toListTasksQuery(params)
+  const { data } = await fetchClient.GET("/api/tasks/", {
+    params: { query },
   })
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<TaskListResponse>
+  return requireData(data)
 }
 
 export async function fetchTask(taskId: string): Promise<Task> {
-  const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
-    headers: { ...authHeaders() },
+  const { data } = await fetchClient.GET("/api/tasks/{task_id}", {
+    params: { path: { task_id: taskId } },
   })
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (res.status === 404) {
-    throw new Error("NOT_FOUND")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<Task>
+  return requireData(data)
 }
 
 export async function fetchTaskAuditLogs(
   taskId: string
 ): Promise<TaskAuditLogListResponse> {
-  const res = await fetch(
-    `/api/tasks/${encodeURIComponent(taskId)}/audit-logs`,
+  const { data } = await fetchClient.GET(
+    "/api/tasks/{task_id}/audit-logs",
     {
-      headers: { ...authHeaders() },
+      params: { path: { task_id: taskId } },
     }
   )
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (res.status === 404) {
-    throw new Error("NOT_FOUND")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<TaskAuditLogListResponse>
+  return requireData(data)
 }
 
 export function sortTasksByDueAtAsc(tasks: Task[]): Task[] {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 import {
@@ -17,12 +17,13 @@ import {
 } from "@/components/ui/sidebar"
 import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
 import { clearToken } from "@/lib/auth"
+import { type ChatConversation } from "@/lib/chat"
 import {
-  createChatConversation,
-  fetchChatConversations,
-  type ChatConversation,
-} from "@/lib/chat"
-import { fetchTaskFacets, type TaskFacets } from "@/lib/tasks"
+  useChatConversationsQuery,
+  useCreateChatConversationMutation,
+} from "@/queries/chat"
+import { useTaskFacetsQuery } from "@/queries/tasks"
+import type { TaskFacets } from "@/lib/tasks"
 import {
   IconCalendarEvent,
   IconChartBar,
@@ -53,79 +54,49 @@ export function AppSidebar() {
   const [searchParams] = useSearchParams()
   const activeTag = searchParams.get("tag")
 
-  const [facets, setFacets] = useState<TaskFacets | null>(null)
-  const [conversations, setConversations] = useState<ChatConversation[]>([])
-  const [chatLoading, setChatLoading] = useState(true)
-  const [chatError, setChatError] = useState<string | null>(null)
-  const [creatingChat, setCreatingChat] = useState(false)
+  const facetsQuery = useTaskFacetsQuery()
+  const conversationsQuery = useChatConversationsQuery(20)
+  const createChat = useCreateChatConversationMutation()
+  const [createChatError, setCreateChatError] = useState<string | null>(null)
   const [tagsExpanded, setTagsExpanded] = useState(false)
 
-  const loadFacets = useCallback(async () => {
-    try {
-      const data = await fetchTaskFacets()
-      setFacets(data)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load task summary"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      setFacets(null)
-    }
-  }, [navigate])
-
-  const loadConversations = useCallback(async () => {
-    setChatError(null)
-    try {
-      const data = await fetchChatConversations(20)
-      setConversations(data.conversations)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load conversations"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      setChatError(msg)
-      setConversations([])
-    } finally {
-      setChatLoading(false)
-    }
-  }, [navigate])
+  const facets: TaskFacets | null = facetsQuery.data ?? null
+  const conversations: ChatConversation[] =
+    conversationsQuery.data?.conversations ?? []
+  const chatLoading = conversationsQuery.isLoading
+  const chatLoadError = conversationsQuery.isError
+    ? conversationsQuery.error instanceof Error
+      ? conversationsQuery.error.message
+      : "Could not load chats"
+    : null
+  const chatError = createChatError ?? chatLoadError
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      await loadFacets()
-      if (cancelled) return
-    })()
-    return () => {
-      cancelled = true
+    const err = facetsQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      clearToken()
+      navigate("/login", { replace: true })
     }
-  }, [loadFacets])
+  }, [facetsQuery.error, navigate])
 
   useEffect(() => {
-    let cancelled = false
-    setChatLoading(true)
-    ;(async () => {
-      await loadConversations()
-      if (cancelled) return
-    })()
-    return () => {
-      cancelled = true
+    const err = conversationsQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      clearToken()
+      navigate("/login", { replace: true })
     }
-  }, [loadConversations])
+  }, [conversationsQuery.error, navigate])
 
   useEffect(() => {
     const handleChatUpdated = () => {
-      void loadConversations()
+      void conversationsQuery.refetch()
     }
     window.addEventListener("taskraptor:chat-updated", handleChatUpdated)
     return () => {
       window.removeEventListener("taskraptor:chat-updated", handleChatUpdated)
     }
-  }, [loadConversations])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch is required from useQuery
+  }, [conversationsQuery.refetch])
 
   function handleLogout() {
     clearToken()
@@ -133,11 +104,10 @@ export function AppSidebar() {
   }
 
   async function handleNewChat() {
-    setCreatingChat(true)
-    setChatError(null)
+    setCreateChatError(null)
     try {
-      const conversation = await createChatConversation()
-      await loadConversations()
+      const conversation = await createChat.mutateAsync({ body: { title: "" } })
+      await conversationsQuery.refetch()
       navigate(`/c/${conversation.id}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to create conversation"
@@ -146,9 +116,7 @@ export function AppSidebar() {
         navigate("/login", { replace: true })
         return
       }
-      setChatError(msg)
-    } finally {
-      setCreatingChat(false)
+      setCreateChatError(msg)
     }
   }
 
@@ -174,9 +142,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton type="button" onClick={handleNewChat} disabled={creatingChat}>
+                <SidebarMenuButton
+                  type="button"
+                  onClick={handleNewChat}
+                  disabled={createChat.isPending}
+                >
                   <IconMessagePlus />
-                  <span>{creatingChat ? "Creating..." : "New Chat"}</span>
+                  <span>{createChat.isPending ? "Creating..." : "New Chat"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

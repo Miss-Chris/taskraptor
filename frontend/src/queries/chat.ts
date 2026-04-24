@@ -18,3 +18,23 @@ export function useChatConversationQuery(conversationId: string | undefined) {
     },
   )
 }
+
+export function useChatConversationsQuery(limit = 20) {
+  return $api.useQuery(
+    "get",
+    "/api/chat/conversations",
+    { params: { query: { limit } } },
+    { retry: false }
+  )
+}
+
+export function useCreateChatConversationMutation() {
+  return $api.useMutation("post", "/api/chat/conversations")
+}
+
+export function useSendChatMessageMutation() {
+  return $api.useMutation(
+    "post",
+    "/api/chat/conversations/{conversation_id}/messages"
+  )
+}

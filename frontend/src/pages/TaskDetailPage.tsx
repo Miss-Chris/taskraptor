@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
@@ -6,7 +6,8 @@ import { TaskTag } from "@/components/tasks/TaskTag"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { clearToken } from "@/lib/auth"
-import { fetchTask, type Task } from "@/lib/tasks"
+import { type Task } from "@/lib/tasks"
+import { useTaskQuery } from "@/queries/tasks"
 
 function formatTs(iso: string | null): string {
   if (!iso) return "—"
@@ -21,50 +22,27 @@ function formatTs(iso: string | null): string {
 export function TaskDetailPage() {
   const { taskId } = useParams<{ taskId: string }>()
   const navigate = useNavigate()
-  const [task, setTask] = useState<Task | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    if (!taskId) {
-      setError("Missing task id")
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const t = await fetchTask(taskId)
-      setTask(t)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load task"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      if (msg === "NOT_FOUND") {
-        setError("Task not found.")
-        setTask(null)
-      } else {
-        setError(msg)
-        setTask(null)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [navigate, taskId])
+  const taskQuery = useTaskQuery(taskId, { enabled: Boolean(taskId) })
+  const task: Task | null = taskQuery.data ?? null
+  const loading = Boolean(taskId) && taskQuery.isLoading
+  const error =
+    !taskId
+      ? "Missing task id"
+      : taskQuery.isError
+        ? taskQuery.error instanceof Error
+          ? taskQuery.error.message === "NOT_FOUND"
+            ? "Task not found."
+            : taskQuery.error.message
+          : "Failed to load task"
+        : null
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      await load()
-      if (cancelled) return
-    })()
-    return () => {
-      cancelled = true
+    const err = taskQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      clearToken()
+      navigate("/login", { replace: true })
     }
-  }, [load])
+  }, [taskQuery.error, navigate])
 
   if (loading) {
     return (

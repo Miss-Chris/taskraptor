@@ -1,47 +1,31 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { TaskList } from "@/components/tasks/TaskList"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { clearToken } from "@/lib/auth"
-import { fetchTasks, sortTasksByDueAtAsc, type Task } from "@/lib/tasks"
+import { sortTasksByDueAtAsc } from "@/lib/tasks"
+import { useTasksQuery } from "@/queries/tasks"
 
 export function UpcomingTasksPage() {
   const navigate = useNavigate()
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetchTasks({ upcoming: true })
-      setTasks(sortTasksByDueAtAsc(res.tasks))
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load tasks"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      setError(msg)
-      setTasks([])
-    } finally {
-      setLoading(false)
-    }
-  }, [navigate])
+  const listParams = useMemo(() => ({ upcoming: true as const }), [])
+  const tasksQuery = useTasksQuery(listParams)
+  const tasks = sortTasksByDueAtAsc(tasksQuery.data?.tasks ?? [])
+  const loading = tasksQuery.isLoading
+  const error = tasksQuery.isError
+    ? tasksQuery.error instanceof Error
+      ? tasksQuery.error.message
+      : "Failed to load tasks"
+    : null
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      await load()
-      if (cancelled) return
-    })()
-    return () => {
-      cancelled = true
+    const err = tasksQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      clearToken()
+      navigate("/login", { replace: true })
     }
-  }, [load])
+  }, [tasksQuery.error, navigate])
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">

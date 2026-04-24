@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- local UI state tracks OpenAPI query + polling */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
@@ -5,16 +6,18 @@ import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { clearToken } from "@/lib/auth"
 import {
-  createChatConversation,
   fetchChatMessagesAfter,
   fetchChatRun,
-  sendChatMessage,
   type ChatConversation,
   type ChatMessage,
   type ChatRun,
 } from "@/lib/chat"
 import { cn } from "@/lib/utils"
-import { useChatConversationQuery } from "@/queries/chat"
+import {
+  useChatConversationQuery,
+  useCreateChatConversationMutation,
+  useSendChatMessageMutation,
+} from "@/queries/chat"
 import { IconAlertTriangle, IconMessagePlus, IconSend, IconSparkles } from "@tabler/icons-react"
 
 const POLL_MS = 1500
@@ -242,14 +245,16 @@ export function ChatPage() {
   const [conversation, setConversation] = useState<ChatConversation | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [runs, setRuns] = useState<ChatRun[]>([])
-  const [creating, setCreating] = useState(false)
-  const [sending, setSending] = useState(false)
   const [input, setInput] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [notFound, setNotFound] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const conversationQuery = useChatConversationQuery(conversationId)
+  const createChat = useCreateChatConversationMutation()
+  const sendMessage = useSendChatMessageMutation()
+  const creating = createChat.isPending
+  const sending = sendMessage.isPending
   const loading = Boolean(conversationId) && conversationQuery.isPending
 
   const latestRun = runs[0] ?? conversation?.latest_run ?? null
@@ -269,19 +274,16 @@ export function ChatPage() {
   )
 
   const createConversation = useCallback(async () => {
-    setCreating(true)
     setError(null)
     try {
-      const next = await createChatConversation()
+      const next = await createChat.mutateAsync({ body: { title: "" } })
       window.dispatchEvent(new Event("taskraptor:chat-updated"))
       navigate(`/c/${next.id}`)
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to create conversation"
       if (!handleAuthError(message)) setError(message)
-    } finally {
-      setCreating(false)
     }
-  }, [handleAuthError, navigate])
+  }, [createChat, handleAuthError, navigate])
 
   useEffect(() => {
     if (!conversationId) {
@@ -371,11 +373,13 @@ export function ChatPage() {
     const content = input.trim()
     if (!conversationId || !content || sending) return
 
-    setSending(true)
     setError(null)
     setRunError(null)
     try {
-      const result = await sendChatMessage(conversationId, content)
+      const result = await sendMessage.mutateAsync({
+        params: { path: { conversation_id: conversationId } },
+        body: { content },
+      })
       setInput("")
       setMessages((current) => mergeMessages(current, [result.message]))
       setRuns((current) => mergeRun(current, result.run))
@@ -383,8 +387,6 @@ export function ChatPage() {
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to send message"
       if (!handleAuthError(message)) setError(message)
-    } finally {
-      setSending(false)
     }
   }
 

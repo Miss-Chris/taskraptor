@@ -1,57 +1,22 @@
-import { getToken } from "@/lib/auth"
+import { fetchClient } from "@/lib/api/client"
+import type { components } from "@/lib/api/schema"
 
-export type TelegramStatusResponse = {
-  connected: boolean
-  bot_name: string
-}
+export type TelegramStatusResponse = components["schemas"]["TelegramStatusOut"]
+export type JoinCodeResponse = components["schemas"]["JoinCodeOut"]
 
-export type JoinCodeResponse = {
-  code: string
-  expires_at: string
-  bot_name: string
-}
-
-function authHeaders(): HeadersInit {
-  const token = getToken()
-  if (!token) {
-    throw new Error("Not authenticated")
+function requireData<T>(data: T | undefined): T {
+  if (data === undefined || data === null) {
+    throw new Error("Request failed")
   }
-  return { Authorization: `Bearer ${token}` }
-}
-
-async function parseErrorDetail(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { detail?: unknown }
-    if (typeof data.detail === "string") return data.detail
-  } catch {
-    /* ignore */
-  }
-  return res.statusText || "Request failed"
+  return data
 }
 
 export async function fetchTelegramStatus(): Promise<TelegramStatusResponse> {
-  const res = await fetch("/api/telegram/status", {
-    headers: { ...authHeaders() },
-  })
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<TelegramStatusResponse>
+  const { data } = await fetchClient.GET("/api/telegram/status", {})
+  return requireData(data)
 }
 
 export async function createTelegramJoinCode(): Promise<JoinCodeResponse> {
-  const res = await fetch("/api/telegram/join-code", {
-    method: "POST",
-    headers: { ...authHeaders() },
-  })
-  if (res.status === 401) {
-    throw new Error("SESSION_EXPIRED")
-  }
-  if (!res.ok) {
-    throw new Error(await parseErrorDetail(res))
-  }
-  return res.json() as Promise<JoinCodeResponse>
+  const { data } = await fetchClient.POST("/api/telegram/join-code", {})
+  return requireData(data)
 }
