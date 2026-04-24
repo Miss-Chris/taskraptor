@@ -6,7 +6,7 @@ from typing import Callable
 
 from django.utils import timezone
 
-from agent.models import AgentRun, AgentRunStatus, LlmModel, MessageLog
+from agent.models import AgentRun, AgentRunStatus, LlmModel, MessageLog, get_or_create_system_model
 from agent.prompts import build_system_prompt
 from agent.run import run_agent
 from agent.schemas import AgentResult
@@ -79,7 +79,7 @@ def handle_user_incoming(
         .first()
     )
     if llm_model is None:
-        raise NoActiveLlmModel(f"No active LlmModel for user_id={user_id}")
+        llm_model = get_or_create_system_model(channel.user)
 
     agent_run = AgentRun.objects.create(
         channel=channel,

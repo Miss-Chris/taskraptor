@@ -8,6 +8,7 @@ from ninja import Router, Status
 from accounts.bearer import AuthBearer
 from accounts.models import User, UserSession
 from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut
+from agent.models import get_or_create_system_model
 
 router = Router(tags=["auth"])
 
@@ -26,6 +27,7 @@ def register(request, payload: RegisterIn):
         email=email,
         password=payload.password,
     )
+    get_or_create_system_model(user)
     session = UserSession.objects.create(
         user=user,
         expires_at=_default_session_expiry(),

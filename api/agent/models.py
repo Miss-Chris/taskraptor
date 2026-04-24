@@ -243,3 +243,18 @@ class MessageLog(models.Model):
 
     def __str__(self) -> str:
         return f"MessageLog({self.pk}, actor={self.actor})"
+
+
+def get_or_create_system_model(user) -> LlmModel:
+    """
+    Return the system_free LlmModel for ``user``, creating it if absent.
+
+    Safe to call multiple times — the unique constraint on (user, system_free)
+    guarantees at most one row per user.  quota=None means no token cap.
+    """
+    model, _ = LlmModel.objects.get_or_create(
+        user=user,
+        model_key=SYSTEM_FREE_MODEL_KEY,
+        defaults={"is_active": True},
+    )
+    return model

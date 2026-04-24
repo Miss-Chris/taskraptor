@@ -14,10 +14,10 @@ uv run python manage.py runserver
 
 Celery assumes a local Redis server is available at `redis://127.0.0.1:6379/0` unless `CELERY_BROKER_URL` is set.
 
-Run the worker:
+Run the worker with auto-reload:
 
 ```bash
-uv run celery -A taskraptor worker --loglevel=info
+uv run python manage.py runworker
 ```
 
 Run beat:

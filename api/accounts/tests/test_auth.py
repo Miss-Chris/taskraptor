@@ -5,6 +5,7 @@ from django.test import Client
 from django.utils import timezone
 
 from accounts.models import UserSession
+from agent.models import LlmModel, SYSTEM_FREE_MODEL_KEY
 
 REGISTER_URL = "/api/auth/register"
 LOGIN_URL = "/api/auth/login"
@@ -30,6 +31,24 @@ def test_register_success(client):
     session = UserSession.objects.get(token=data["token"])
     assert session.expires_at is not None
     assert session.expires_at > timezone.now()
+
+
+@pytest.mark.django_db
+def test_register_creates_system_free_model(client):
+    response = client.post(
+        REGISTER_URL,
+        data={"email": "newuser@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    assert response.status_code == 201
+    token = response.json()["token"]
+    session = UserSession.objects.get(token=token)
+    model = LlmModel.objects.filter(
+        user=session.user, model_key=SYSTEM_FREE_MODEL_KEY
+    ).first()
+    assert model is not None
+    assert model.is_active is True
+    assert model.quota is None
 
 
 @pytest.mark.django_db
