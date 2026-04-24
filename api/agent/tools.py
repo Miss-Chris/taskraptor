@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from django.db import connection
+from django.utils import timezone
 from pydantic import BaseModel, Field, model_validator
 
 from tasks.models import Task, TaskStatus
@@ -125,21 +126,53 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "run_sql",
+            "name": "query_tasks",
             "description": (
-                "Run a read-only SELECT query on the tasks_task table. "
-                "The WHERE user_id = ? filter is added automatically — do not include it yourself. "
-                "Example: SELECT id, name, status FROM tasks_task WHERE deleted_at IS NULL"
+                "Search and list the user's active tasks. Use this before editing or deleting "
+                "when you need to find a task ID."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {
+                    "status": {
                         "type": "string",
-                        "description": "A SELECT SQL query on tasks_task.",
+                        "enum": ["pending", "in_progress", "completed", "cancelled"],
+                        "description": "Filter by task status.",
+                    },
+                    "tag": {
+                        "type": "string",
+                        "description": "Filter to tasks containing this tag.",
+                    },
+                    "upcoming": {
+                        "type": "boolean",
+                        "description": "Only tasks with a future due date, excluding completed tasks.",
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "description": "Filter by exact priority.",
+                    },
+                    "min_priority": {
+                        "type": "integer",
+                        "description": "Filter to tasks with priority greater than or equal to this value.",
+                    },
+                    "max_priority": {
+                        "type": "integer",
+                        "description": "Filter to tasks with priority less than or equal to this value.",
+                    },
+                    "search": {
+                        "type": "string",
+                        "description": "Case-insensitive text search within task names.",
+                    },
+                    "include_completed": {
+                        "type": "boolean",
+                        "description": "Whether completed tasks should be included. Defaults to true.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of tasks to return. Capped at 100.",
                     },
                 },
-                "required": ["query"],
+                "required": [],
             },
         },
     },
@@ -180,6 +213,18 @@ class EditTaskArgs(BaseModel):
 
 class DeleteTaskArgs(BaseModel):
     task_id: UUID
+
+
+class QueryTasksArgs(BaseModel):
+    status: TaskStatus | None = None
+    tag: str | None = None
+    upcoming: bool = False
+    priority: int | None = None
+    min_priority: int | None = None
+    max_priority: int | None = None
+    search: str | None = None
+    include_completed: bool = True
+    limit: int = 100
 
 
 class RunSqlArgs(BaseModel):
@@ -253,6 +298,74 @@ def _tool_delete_task(args: DeleteTaskArgs, user_id: UUID) -> str:
     return json.dumps({"ok": True, "task_id": str(args.task_id)})
 
 
+def _task_to_dict(task: Task) -> dict[str, Any]:
+    tags = task.tags if isinstance(task.tags, list) else []
+    return {
+        "id": str(task.pk),
+        "name": task.name,
+        "status": task.status,
+        "priority": task.priority,
+        "due_at": task.due_at.isoformat() if task.due_at else None,
+        "due_type": task.due_type,
+        "tags": [str(tag) for tag in tags],
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "archived_at": task.archived_at.isoformat() if task.archived_at else None,
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+    }
+
+
+def _tool_query_tasks(args: QueryTasksArgs, user_id: UUID) -> str:
+    qs = Task.objects.filter(user_id=user_id, deleted_at__isnull=True)
+
+    if args.status is not None:
+        qs = qs.filter(status=args.status)
+
+    if args.include_completed is False:
+        qs = qs.exclude(status=TaskStatus.COMPLETED)
+
+    if args.upcoming:
+        qs = qs.filter(due_at__isnull=False, due_at__gte=timezone.now()).exclude(
+            status=TaskStatus.COMPLETED
+        )
+
+    if args.priority is not None:
+        qs = qs.filter(priority=args.priority)
+    else:
+        if args.min_priority is not None:
+            qs = qs.filter(priority__gte=args.min_priority)
+        if args.max_priority is not None:
+            qs = qs.filter(priority__lte=args.max_priority)
+
+    if args.search is not None and args.search.strip():
+        qs = qs.filter(name__icontains=args.search.strip())
+
+    if args.tag is not None and args.tag.strip():
+        tag = args.tag.strip()
+        connection_features = connection.features
+        if connection_features.supports_json_field_contains:
+            qs = qs.filter(tags__contains=[tag])
+        else:
+            match_ids: list[UUID] = [
+                pk
+                for pk, tag_list in qs.values_list("pk", "tags")
+                if isinstance(tag_list, list) and tag in (str(x) for x in tag_list)
+            ]
+            qs = qs.filter(pk__in=match_ids)
+
+    limit = max(0, min(args.limit, 100))
+    tasks = list(qs[:limit])
+    return json.dumps(
+        {
+            "ok": True,
+            "tasks": [_task_to_dict(task) for task in tasks],
+            "count": len(tasks),
+        },
+        default=_json_default,
+    )
+
+
+# Raw SQL is intentionally retained for future/dev use but is not exposed in
+# TOOL_DEFINITIONS or _TOOL_MAP. Do not wire this into the agent by default.
 def _tool_run_sql(args: RunSqlArgs, user_id: UUID) -> str:
     query = args.query.strip()
 
@@ -293,7 +406,7 @@ _TOOL_MAP = {
     "create_task": (CreateTaskArgs, _tool_create_task),
     "edit_task": (EditTaskArgs, _tool_edit_task),
     "delete_task": (DeleteTaskArgs, _tool_delete_task),
-    "run_sql": (RunSqlArgs, _tool_run_sql),
+    "query_tasks": (QueryTasksArgs, _tool_query_tasks),
 }
 
 

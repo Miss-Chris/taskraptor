@@ -62,7 +62,7 @@ def test_multi_turn_workflow_scripted(
       1. "Add a task to buy milk"          -> create_task + respond_to_user
       2. "I need to call my cousin"        -> create_task + respond_to_user
       3. "Change milk task to buy cookies" -> edit_task  + respond_to_user
-      4. "What are my tasks?"              -> run_sql    + respond_to_user
+      4. "What are my tasks?"              -> query_tasks + respond_to_user
 
     All tool calls execute against the real test DB. The only fake is
     the LLM response sequence.
@@ -111,8 +111,8 @@ def test_multi_turn_workflow_scripted(
         conversation,
         "What are my tasks?",
         tool_call_response(
-            "run_sql",
-            {"query": "SELECT id, name, status FROM tasks_task WHERE deleted_at IS NULL"},
+            "query_tasks",
+            {},
         ),
         tool_call_response(
             "respond_to_user",
