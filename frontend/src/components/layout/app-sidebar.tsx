@@ -21,6 +21,7 @@ import {
   IconCalendarEvent,
   IconChartBar,
   IconCheckbox,
+  IconBug,
   IconLogout,
   IconMessagePlus,
   IconRobot,
@@ -206,6 +207,14 @@ export function AppSidebar() {
           <SidebarGroupLabel>Account</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === "/debug"} tooltip="Agent debug">
+                  <NavLink to="/debug">
+                    <IconBug />
+                    <span>Agent debug</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton type="button">
                   <IconChartBar />

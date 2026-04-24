@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { AppShell } from "@/components/layout/AppShell"
+import { DebugPage } from "@/pages/DebugPage"
 import { HomePage } from "@/pages/HomePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { RegisterPage } from "@/pages/RegisterPage"
@@ -24,6 +25,7 @@ export function App() {
           }
         >
           <Route index element={<HomePage />} />
+          <Route path="debug" element={<DebugPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/upcoming" element={<UpcomingTasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailPage />} />
