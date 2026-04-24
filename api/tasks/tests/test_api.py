@@ -5,7 +5,7 @@ from django.test import Client
 from django.utils import timezone
 
 from tasks.models import TaskStatus
-from tasks.services import create_task
+from tasks.services import create_task, update_task
 
 REGISTER_URL = "/api/auth/register"
 LIST_URL = "/api/tasks/"
@@ -42,6 +42,13 @@ def test_get_task_unauthenticated(client):
     from uuid import uuid4
 
     assert client.get(f"/api/tasks/{uuid4()}").status_code == 401
+
+
+@pytest.mark.django_db
+def test_get_task_audit_logs_unauthenticated(client):
+    from uuid import uuid4
+
+    assert client.get(f"/api/tasks/{uuid4()}/audit-logs").status_code == 401
 
 
 @pytest.mark.django_db
@@ -203,6 +210,67 @@ def test_get_task_success(client):
     body = r.json()
     assert body["name"] == "X"
     assert body["tags"] == ["work"]
+
+
+@pytest.mark.django_db
+def test_get_task_audit_logs_404_for_other_user(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "audit-a@example.com")
+    other = User.objects.create_user("audit-b@example.com", "secret123")
+    task = create_task(user_id=other.pk, name="Secret")
+    update_task(task, name="Still secret", audit_actor_id=other.pk)
+
+    response = client.get(
+        f"/api/tasks/{task.pk}/audit-logs",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_get_task_audit_logs_success_ordered_newest_first(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "audit-c@example.com")
+    user = User.objects.get(email="audit-c@example.com")
+    task = create_task(user_id=user.pk, name="Initial", tags=["work"], priority=1)
+
+    update_task(task, name="Renamed", audit_actor_id=user.pk)
+    update_task(task, priority=3, audit_actor_id=user.pk)
+    other_task = create_task(user_id=user.pk, name="Other")
+    update_task(other_task, name="Other renamed", audit_actor_id=user.pk)
+
+    response = client.get(
+        f"/api/tasks/{task.pk}/audit-logs",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    logs = response.json()["audit_logs"]
+    assert [log["action"] for log in logs] == ["priority_changed", "name_changed"]
+    assert logs[0]["task_id"] == str(task.pk)
+    assert logs[0]["old_value"] == 1
+    assert logs[0]["new_value"] == 3
+    assert logs[0]["actor_id"] == str(user.pk)
+
+
+@pytest.mark.django_db
+def test_get_task_audit_logs_empty(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "audit-d@example.com")
+    user = User.objects.get(email="audit-d@example.com")
+    task = create_task(user_id=user.pk, name="No changes")
+
+    response = client.get(
+        f"/api/tasks/{task.pk}/audit-logs",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"audit_logs": []}
 
 
 @pytest.mark.django_db

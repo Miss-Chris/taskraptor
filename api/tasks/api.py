@@ -11,10 +11,12 @@ from accounts.bearer import AuthBearer
 from accounts.http import AuthedHttpRequest
 from accounts.schemas import ErrorOut
 from accounts.models import User
-from tasks.models import Task, TaskStatus
+from tasks.models import Task, TaskAuditLog, TaskStatus
 from tasks.schemas import (
     StatusCountItem,
     TagCountItem,
+    TaskAuditLogListOut,
+    TaskAuditLogOut,
     TaskFacetsOut,
     TaskListOut,
     TaskOut,
@@ -50,6 +52,18 @@ def _to_task_out(task: Task, user: User) -> TaskOut:
         completed_at=task.completed_at,
         archived_at=task.archived_at,
         created_at=task.created_at,
+    )
+
+
+def _to_task_audit_log_out(log: TaskAuditLog) -> TaskAuditLogOut:
+    return TaskAuditLogOut(
+        id=log.id,
+        task_id=log.task_id,
+        created_at=log.created_at,
+        action=log.action,
+        old_value=log.old_value,
+        new_value=log.new_value,
+        actor_id=log.actor_id,
     )
 
 
@@ -141,6 +155,24 @@ def list_tasks(
         TaskListOut(
             tasks=[_to_task_out(t, user) for t in tasks],
             count=len(tasks),
+        ),
+    )
+
+
+@router.get(
+    "/{task_id}/audit-logs",
+    response={200: TaskAuditLogListOut, 401: ErrorOut, 404: ErrorOut},
+)
+def get_task_audit_logs(request: AuthedHttpRequest, task_id: UUID):
+    user = request.auth
+    if not _base_queryset(user).filter(pk=task_id).exists():
+        return Status(404, {"detail": "Not found."})
+
+    logs = TaskAuditLog.objects.filter(task_id=task_id).order_by("-created_at")
+    return Status(
+        200,
+        TaskAuditLogListOut(
+            audit_logs=[_to_task_audit_log_out(log) for log in logs],
         ),
     )
 

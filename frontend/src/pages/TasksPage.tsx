@@ -1,128 +1,512 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
+import {
+  IconChevronRight,
+  IconCircle,
+  IconCircleCheck,
+  IconClockHour4,
+  IconInbox,
+  IconListDetails,
+  IconTag,
+} from "@tabler/icons-react"
 
 import { TaskList } from "@/components/tasks/TaskList"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
+import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
+import { TaskTag } from "@/components/tasks/TaskTag"
+import { Skeleton } from "@/components/ui/skeleton"
 import { clearToken } from "@/lib/auth"
-import { fetchTasks, type Task } from "@/lib/tasks"
+import {
+  fetchTask,
+  fetchTaskAuditLogs,
+  fetchTaskFacets,
+  fetchTasks,
+  type Task,
+  type TaskAuditLog,
+  type TaskFacets,
+} from "@/lib/tasks"
+import { cn } from "@/lib/utils"
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "All statuses" },
+  { value: "", label: "All tasks" },
   { value: "pending", label: "Pending" },
   { value: "in_progress", label: "In progress" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
 ]
 
+const STATUS_ICON: Record<string, typeof IconCircle> = {
+  pending: IconCircle,
+  in_progress: IconClockHour4,
+  completed: IconCircleCheck,
+  cancelled: IconCircle,
+}
+
+function formatTs(iso: string | null): string {
+  if (!iso) return "None"
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "None"
+  return d.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "None"
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "None"
+  if (typeof value === "object") return JSON.stringify(value)
+  return String(value).replace(/_/g, " ")
+}
+
+function formatAuditAction(action: string): string {
+  const labels: Record<string, string> = {
+    status_changed: "Status changed",
+    name_changed: "Name changed",
+    priority_changed: "Priority changed",
+    tags_changed: "Tags changed",
+    deleted: "Deleted",
+  }
+  return labels[action] ?? action.replace(/_/g, " ")
+}
+
+function scopeCount(facets: TaskFacets | null, status: string): number | null {
+  if (!facets) return null
+  if (!status) return facets.total
+  return facets.status_counts.find((row) => row.status === status)?.count ?? 0
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string
+  value: string | number
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm font-medium">{value}</dd>
+    </div>
+  )
+}
+
+function HistoryRow({ audit }: { audit: TaskAuditLog }) {
+  return (
+    <li className="border-b border-border py-3 last:border-b-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">
+            {formatAuditAction(audit.action)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatTs(audit.created_at)}
+          </p>
+        </div>
+      </div>
+      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+        {formatValue(audit.old_value)}{" "}
+        <IconChevronRight className="mx-1 inline size-3" />{" "}
+        <span className="text-foreground">{formatValue(audit.new_value)}</span>
+      </p>
+    </li>
+  )
+}
+
 export function TasksPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const tag = searchParams.get("tag") ?? ""
   const status = searchParams.get("status") ?? ""
+  const requestedTaskId = searchParams.get("task")
 
+  const [facets, setFacets] = useState<TaskFacets | null>(null)
+  const [facetsError, setFacetsError] = useState<string | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [tasksLoading, setTasksLoading] = useState(true)
+  const [tasksError, setTasksError] = useState<string | null>(null)
+  const [taskDetail, setTaskDetail] = useState<Task | null>(null)
+  const [history, setHistory] = useState<TaskAuditLog[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const selectedTaskId = useMemo(() => {
+    if (requestedTaskId && tasks.some((task) => task.id === requestedTaskId)) {
+      return requestedTaskId
+    }
+    return tasks[0]?.id ?? null
+  }, [requestedTaskId, tasks])
+
+  const selectedListTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [selectedTaskId, tasks]
+  )
+  const selectedTask = taskDetail ?? selectedListTask
+
+  const handleSessionError = useCallback(
+    (msg: string) => {
+      if (msg === "SESSION_EXPIRED") {
+        clearToken()
+        navigate("/login", { replace: true })
+        return true
+      }
+      return false
+    },
+    [navigate]
+  )
+
+  const loadFacets = useCallback(async () => {
+    setFacetsError(null)
     try {
-      const tagParam = tag.trim() || undefined
-      const statusParam = status.trim() || undefined
+      const data = await fetchTaskFacets()
+      setFacets(data)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load task summary"
+      if (handleSessionError(msg)) return
+      setFacetsError(msg)
+      setFacets(null)
+    }
+  }, [handleSessionError])
+
+  const loadTasks = useCallback(async () => {
+    setTasksLoading(true)
+    setTasksError(null)
+    try {
       const res = await fetchTasks({
-        tag: tagParam,
-        status: statusParam,
+        tag: tag.trim() || undefined,
+        status: status.trim() || undefined,
       })
       setTasks(res.tasks)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load tasks"
-      if (msg === "SESSION_EXPIRED") {
-        clearToken()
-        navigate("/login", { replace: true })
-        return
-      }
-      setError(msg)
+      if (handleSessionError(msg)) return
+      setTasksError(msg)
       setTasks([])
     } finally {
-      setLoading(false)
+      setTasksLoading(false)
     }
-  }, [navigate, tag, status])
+  }, [handleSessionError, status, tag])
 
   useEffect(() => {
+    void loadFacets()
+  }, [loadFacets])
+
+  useEffect(() => {
+    void loadTasks()
+  }, [loadTasks])
+
+  useEffect(() => {
+    if (!selectedTaskId) {
+      setTaskDetail(null)
+      setHistory([])
+      setDetailError(null)
+      setDetailLoading(false)
+      return
+    }
+
     let cancelled = false
+    setDetailLoading(true)
+    setDetailError(null)
+    setTaskDetail(null)
+    setHistory([])
     ;(async () => {
-      await load()
-      if (cancelled) return
+      try {
+        const [task, auditResponse] = await Promise.all([
+          fetchTask(selectedTaskId),
+          fetchTaskAuditLogs(selectedTaskId),
+        ])
+        if (cancelled) return
+        setTaskDetail(task)
+        setHistory(auditResponse.audit_logs)
+      } catch (e) {
+        if (cancelled) return
+        const msg =
+          e instanceof Error ? e.message : "Failed to load task details"
+        if (handleSessionError(msg)) return
+        setDetailError(msg === "NOT_FOUND" ? "Task not found." : msg)
+      } finally {
+        if (!cancelled) setDetailLoading(false)
+      }
     })()
+
     return () => {
       cancelled = true
     }
-  }, [load])
+  }, [handleSessionError, selectedTaskId])
 
-  function setStatusFilter(next: string) {
+  function updateFilters(next: {
+    status?: string
+    tag?: string
+    task?: string | null
+  }) {
     const nextParams = new URLSearchParams(searchParams)
-    if (next === "") {
-      nextParams.delete("status")
-    } else {
-      nextParams.set("status", next)
+    if (next.status !== undefined) {
+      if (next.status) nextParams.set("status", next.status)
+      else nextParams.delete("status")
+    }
+    if (next.tag !== undefined) {
+      if (next.tag) nextParams.set("tag", next.tag)
+      else nextParams.delete("tag")
+    }
+    if (next.task !== undefined) {
+      if (next.task) nextParams.set("task", next.task)
+      else nextParams.delete("task")
     }
     setSearchParams(nextParams, { replace: true })
   }
 
-  function clearTag() {
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.delete("tag")
-    setSearchParams(nextParams, { replace: true })
+  function selectStatus(nextStatus: string) {
+    updateFilters({ status: nextStatus, tag: "", task: null })
   }
 
-  const title = tag ? `Tasks tagged “${tag}”` : "All tasks"
-  const description =
-    tag || status
-      ? "Filtered from your workspace. Clear filters to see everything."
-      : "Everything that is not deleted."
+  function selectTag(nextTag: string) {
+    updateFilters({ status: "", tag: nextTag, task: null })
+  }
+
+  function selectTask(task: Task) {
+    updateFilters({ task: task.id })
+  }
+
+  const title = tag
+    ? `#${tag}`
+    : (STATUS_OPTIONS.find((option) => option.value === status)?.label ??
+      "Tasks")
+  const activeFilterLabel = tag
+    ? `Tagged ${tag}`
+    : status
+      ? STATUS_OPTIONS.find((option) => option.value === status)?.label
+      : "All tasks"
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="task-status-filter">Status</Label>
-              <select
-                id="task-status-filter"
-                className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full min-w-[10rem] rounded-md border px-3 py-1 text-sm shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:w-48"
-                value={status}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                {STATUS_OPTIONS.map((o) => (
-                  <option key={o.value || "all"} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {tag ? (
-              <Button type="button" variant="outline" size="sm" onClick={clearTag} className="w-fit">
-                Clear tag filter
-              </Button>
-            ) : null}
-          </div>
+    <div className="grid h-full min-h-[calc(100vh-7rem)] w-full gap-4 lg:grid-cols-[16rem_minmax(22rem,1fr)_minmax(22rem,0.95fr)]">
+      <aside className="overflow-hidden rounded-lg border border-border bg-card/40">
+        <div className="border-b border-border px-4 py-3">
+          <h1 className="text-base font-semibold">Tasks</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Browse by scope or tag.
+          </p>
+        </div>
+        <div className="space-y-5 p-3">
+          <nav aria-label="Task scopes" className="space-y-1">
+            {STATUS_OPTIONS.map((option) => {
+              const Icon = option.value ? STATUS_ICON[option.value] : IconInbox
+              const active = status === option.value
+              const count = scopeCount(facets, option.value)
+              return (
+                <button
+                  key={option.value || "all"}
+                  type="button"
+                  className={cn(
+                    "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-accent",
+                    active && "bg-accent text-accent-foreground"
+                  )}
+                  onClick={() => selectStatus(option.value)}
+                >
+                  <Icon className="size-4 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {option.label}
+                  </span>
+                  {count != null ? (
+                    <span className="text-xs text-muted-foreground">
+                      {count}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </nav>
 
+          <section>
+            <div className="mb-2 flex items-center justify-between px-2">
+              <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Tags
+              </h2>
+              {tag ? (
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => selectTag("")}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            {facetsError ? (
+              <p className="px-2 text-xs text-destructive">{facetsError}</p>
+            ) : facets == null ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full rounded-md" />
+                ))}
+              </div>
+            ) : facets.tag_counts.length > 0 ? (
+              <nav aria-label="Task tags" className="space-y-1">
+                {facets.tag_counts.map((row) => {
+                  const active = tag === row.tag
+                  return (
+                    <button
+                      key={row.tag}
+                      type="button"
+                      className={cn(
+                        "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-accent",
+                        active && "bg-accent text-accent-foreground"
+                      )}
+                      onClick={() => selectTag(row.tag)}
+                    >
+                      <IconTag className="size-4 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{row.tag}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {row.count}
+                      </span>
+                    </button>
+                  )
+                })}
+              </nav>
+            ) : (
+              <p className="px-2 text-sm text-muted-foreground">
+                No active tags yet.
+              </p>
+            )}
+          </section>
+        </div>
+      </aside>
+
+      <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-lg border border-border bg-card/40">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold">{title}</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {tasksLoading
+                ? "Loading tasks"
+                : `${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+            </p>
+          </div>
+          {activeFilterLabel ? (
+            <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+              {activeFilterLabel}
+            </span>
+          ) : null}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-3">
           <TaskList
             tasks={tasks}
-            loading={loading}
-            error={error}
-            emptyMessage="No tasks match these filters. Create tasks via chat or your agent when that’s available."
+            loading={tasksLoading}
+            error={tasksError}
+            emptyMessage="No tasks match this view."
+            selectedTaskId={selectedTaskId}
+            onSelectTask={selectTask}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
+
+      <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-lg border border-border bg-card/40">
+        {!selectedTaskId ? (
+          <div className="flex min-h-[24rem] flex-col items-center justify-center p-6 text-center">
+            <IconListDetails className="mb-3 size-8 text-muted-foreground" />
+            <h2 className="text-base font-semibold">No task selected</h2>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              Select a task from the list to see its details and recent history.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="border-b border-border px-5 py-4">
+              {selectedTask ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h2 className="min-w-0 flex-1 text-lg leading-snug font-semibold">
+                      {selectedTask.name}
+                    </h2>
+                    <TaskStatusBadge status={selectedTask.status} />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTask.tags.length > 0 ? (
+                      selectedTask.tags.map((taskTag) => (
+                        <TaskTag key={taskTag} label={taskTag} />
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        No tags
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : detailLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-4/5 rounded-md" />
+                  <Skeleton className="h-5 w-28 rounded-md" />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              {detailError ? (
+                <p className="p-5 text-sm text-destructive" role="alert">
+                  {detailError}
+                </p>
+              ) : selectedTask ? (
+                <div className="space-y-6 p-5">
+                  <dl className="grid grid-cols-2 gap-4">
+                    <DetailRow label="Priority" value={selectedTask.priority} />
+                    <DetailRow label="Due type" value={selectedTask.due_type} />
+                    <DetailRow
+                      label="Due"
+                      value={formatTs(selectedTask.due_at)}
+                    />
+                    <DetailRow
+                      label="Reminder"
+                      value={formatTs(selectedTask.remind_at)}
+                    />
+                    <DetailRow
+                      label="Completed"
+                      value={formatTs(selectedTask.completed_at)}
+                    />
+                    <DetailRow
+                      label="Created"
+                      value={formatTs(selectedTask.created_at)}
+                    />
+                  </dl>
+
+                  <section>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">History</h3>
+                      {detailLoading ? (
+                        <span className="text-xs text-muted-foreground">
+                          Refreshing
+                        </span>
+                      ) : null}
+                    </div>
+                    {detailLoading && history.length === 0 ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton
+                            key={i}
+                            className="h-14 w-full rounded-md"
+                          />
+                        ))}
+                      </div>
+                    ) : history.length > 0 ? (
+                      <ul className="rounded-md border border-border px-3">
+                        {history.map((audit) => (
+                          <HistoryRow key={audit.id} audit={audit} />
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                        No changes recorded for this task yet.
+                      </p>
+                    )}
+                  </section>
+                </div>
+              ) : detailLoading ? (
+                <div className="space-y-5 p-5">
+                  <Skeleton className="h-20 w-full rounded-md" />
+                  <Skeleton className="h-32 w-full rounded-md" />
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   )
 }

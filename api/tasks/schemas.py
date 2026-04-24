@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from ninja import Schema
@@ -42,3 +43,16 @@ class TaskFacetsOut(Schema):
     # Total non-deleted tasks for the current user
     total: int
 
+
+class TaskAuditLogOut(Schema):
+    id: UUID
+    task_id: UUID
+    created_at: datetime
+    action: str
+    old_value: Any
+    new_value: Any
+    actor_id: UUID | None
+
+
+class TaskAuditLogListOut(Schema):
+    audit_logs: list[TaskAuditLogOut]

@@ -16,9 +16,23 @@ export type Task = {
   created_at: string
 }
 
+export type TaskAuditLog = {
+  id: string
+  task_id: string
+  created_at: string
+  action: string
+  old_value: unknown
+  new_value: unknown
+  actor_id: string | null
+}
+
 export type TaskListResponse = {
   tasks: Task[]
   count: number
+}
+
+export type TaskAuditLogListResponse = {
+  audit_logs: TaskAuditLog[]
 }
 
 export type StatusCountItem = {
@@ -101,7 +115,9 @@ export async function fetchTaskFacets(): Promise<TaskFacets> {
   return res.json() as Promise<TaskFacets>
 }
 
-export async function fetchTasks(params: ListTasksParams = {}): Promise<TaskListResponse> {
+export async function fetchTasks(
+  params: ListTasksParams = {}
+): Promise<TaskListResponse> {
   const res = await fetch(`/api/tasks/${buildListQuery(params)}`, {
     headers: { ...authHeaders() },
   })
@@ -128,6 +144,27 @@ export async function fetchTask(taskId: string): Promise<Task> {
     throw new Error(await parseErrorDetail(res))
   }
   return res.json() as Promise<Task>
+}
+
+export async function fetchTaskAuditLogs(
+  taskId: string
+): Promise<TaskAuditLogListResponse> {
+  const res = await fetch(
+    `/api/tasks/${encodeURIComponent(taskId)}/audit-logs`,
+    {
+      headers: { ...authHeaders() },
+    }
+  )
+  if (res.status === 401) {
+    throw new Error("SESSION_EXPIRED")
+  }
+  if (res.status === 404) {
+    throw new Error("NOT_FOUND")
+  }
+  if (!res.ok) {
+    throw new Error(await parseErrorDetail(res))
+  }
+  return res.json() as Promise<TaskAuditLogListResponse>
 }
 
 export function sortTasksByDueAtAsc(tasks: Task[]): Task[] {

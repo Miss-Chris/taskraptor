@@ -7,11 +7,15 @@ export function TaskList({
   loading,
   error,
   emptyMessage,
+  selectedTaskId,
+  onSelectTask,
 }: {
   tasks: Task[]
   loading: boolean
   error: string | null
   emptyMessage: string
+  selectedTaskId?: string | null
+  onSelectTask?: (task: Task) => void
 }) {
   if (loading) {
     return (
@@ -25,21 +29,25 @@ export function TaskList({
 
   if (error) {
     return (
-      <p className="text-destructive text-sm" role="alert">
+      <p className="text-sm text-destructive" role="alert">
         {error}
       </p>
     )
   }
 
   if (tasks.length === 0) {
-    return <p className="text-muted-foreground text-sm">{emptyMessage}</p>
+    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
   }
 
   return (
     <ul className="space-y-3">
       {tasks.map((task) => (
         <li key={task.id}>
-          <TaskItem task={task} />
+          <TaskItem
+            task={task}
+            selected={selectedTaskId === task.id}
+            onSelect={onSelectTask}
+          />
         </li>
       ))}
     </ul>
