@@ -7,6 +7,7 @@ import { ChatPage } from "@/pages/ChatPage"
 import { ConversationsPage } from "@/pages/ConversationsPage"
 import { DebugPage } from "@/pages/DebugPage"
 import { LoginPage } from "@/pages/LoginPage"
+import { ModelsPage } from "@/pages/ModelsPage"
 import { RegisterPage } from "@/pages/RegisterPage"
 import { TaskDetailPage } from "@/pages/TaskDetailPage"
 import { TasksPage } from "@/pages/TasksPage"
@@ -31,6 +32,7 @@ export function App() {
           <Route path="c/:conversationId" element={<ChatPage />} />
           <Route path="conversations" element={<ConversationsPage />} />
           <Route path="debug" element={<DebugPage />} />
+          <Route path="models" element={<ModelsPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/upcoming" element={<UpcomingTasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailPage />} />

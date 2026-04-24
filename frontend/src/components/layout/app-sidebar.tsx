@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog"
+import { UsageMeter } from "@/components/usage/UsageMeter"
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +22,7 @@ import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
 import { clearToken } from "@/lib/auth"
 import { type ChatConversation } from "@/lib/chat"
 import { useChatConversationsQuery } from "@/queries/chat"
+import { useUsageSummaryQuery } from "@/queries/usage"
 import { useTaskFacetsQuery } from "@/queries/tasks"
 import type { TaskFacets } from "@/lib/tasks"
 import {
@@ -57,6 +59,7 @@ export function AppSidebar() {
 
   const facetsQuery = useTaskFacetsQuery()
   const conversationsQuery = useChatConversationsQuery(6)
+  const usageQuery = useUsageSummaryQuery()
   const [tagsExpanded, setTagsExpanded] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ChatConversation | null>(null)
 
@@ -114,6 +117,7 @@ export function AppSidebar() {
   const tagCounts = facets?.tag_counts ?? []
   const visibleTagCounts = tagCounts.slice(0, tagsExpanded ? 10 : 5)
   const canToggleTags = tagCounts.length > 5
+  const activeSystemModel = usageQuery.data?.models.find((model) => model.is_active && model.is_system) ?? null
 
   return (
     <Sidebar>
@@ -299,10 +303,23 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton type="button">
-                  <IconChartBar />
-                  <span>Usage / API key</span>
+                <SidebarMenuButton asChild isActive={pathname === "/models"} tooltip="Models">
+                  <NavLink to="/models">
+                    <IconChartBar />
+                    <span>Models</span>
+                  </NavLink>
                 </SidebarMenuButton>
+                {activeSystemModel ? (
+                  <div className="px-3 pt-2 pb-1">
+                    <UsageMeter
+                      quota={activeSystemModel.quota}
+                      quotaUsed={activeSystemModel.quota_used}
+                      quotaRemaining={activeSystemModel.quota_remaining}
+                      isAvailable={activeSystemModel.is_available}
+                      compact
+                    />
+                  </div>
+                ) : null}
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton type="button">
