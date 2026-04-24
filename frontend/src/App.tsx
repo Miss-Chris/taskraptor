@@ -2,8 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { AppShell } from "@/components/layout/AppShell"
+import { ChatPage } from "@/pages/ChatPage"
 import { DebugPage } from "@/pages/DebugPage"
-import { HomePage } from "@/pages/HomePage"
 import { LoginPage } from "@/pages/LoginPage"
 import { RegisterPage } from "@/pages/RegisterPage"
 import { TaskDetailPage } from "@/pages/TaskDetailPage"
@@ -24,7 +24,8 @@ export function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<HomePage />} />
+          <Route index element={<ChatPage />} />
+          <Route path="c/:conversationId" element={<ChatPage />} />
           <Route path="debug" element={<DebugPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/upcoming" element={<UpcomingTasksPage />} />

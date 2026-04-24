@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -11,6 +12,31 @@ from tasks.models import AuditAction, DueType, Task, TaskAuditLog, TaskStatus
 from taskraptor.timezones import normalize_to_utc
 
 UNSET = object()
+
+
+def top_active_tags_for_user(
+    user_id: UUID,
+    *,
+    limit: int | None = None,
+) -> list[tuple[str, int]]:
+    qs = Task.objects.filter(
+        user_id=user_id,
+        deleted_at__isnull=True,
+        archived_at__isnull=True,
+    ).exclude(status__in=[TaskStatus.COMPLETED, TaskStatus.CANCELLED])
+
+    tag_counter: Counter[str] = Counter()
+    for tags in qs.values_list("tags", flat=True):
+        if isinstance(tags, list):
+            for raw_tag in tags:
+                tag = str(raw_tag).strip()
+                if tag:
+                    tag_counter[tag] += 1
+
+    ranked = sorted(tag_counter.items(), key=lambda item: (-item[1], item[0]))
+    if limit is None:
+        return ranked
+    return ranked[:limit]
 
 
 def create_task(

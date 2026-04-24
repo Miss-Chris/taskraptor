@@ -32,6 +32,7 @@ def build_system_prompt(
     timezone: str | None = None,
     local_now: str | None = None,
     local_date: str | None = None,
+    top_tags: list[str] | None = None,
 ) -> str:
     prompt = BASE_SYSTEM_PROMPT
     if timezone and local_now and local_date:
@@ -43,6 +44,17 @@ def build_system_prompt(
             f"- local_date: {local_date}\n"
             "Interpret relative dates like today and tomorrow using this context. "
             "Tool calls can use local dates/times; backend tools handle timezone conversion."
+        )
+
+    if top_tags:
+        tag_lines = "\n".join(f"- {tag}" for tag in top_tags)
+        prompt = (
+            f"{prompt}\n\n"
+            "## Tag Guidance\n"
+            "Prefer reusing these existing top tags when tagging tasks:\n"
+            f"{tag_lines}\n"
+            "Create a new short lowercase tag only when none of these fit. "
+            "Avoid over-tagging; use only tags that help the user find or group the task."
         )
 
     instructions = (prompt_instructions or "").strip()

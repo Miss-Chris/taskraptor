@@ -18,7 +18,8 @@ from channels.models import Conversation
 from channels.runtime import DummyConversation
 from channels.services import get_conversation
 from channels.workflow import handle_system_message, handle_user_incoming
-from tasks.models import Task
+from tasks.models import Task, TaskStatus
+from tasks.services import create_task
 
 from channels.tests.scripted_llm import ScriptedLlm, text_response, tool_call_response
 
@@ -317,6 +318,40 @@ def test_workflow_passes_user_prompt_instructions_into_system_message(
     assert non_system_messages[1]["content"] == "second reply"
     assert non_system_messages[2]["role"] == "user"
     assert non_system_messages[2]["content"] == "latest request"
+
+
+@pytest.mark.django_db
+def test_workflow_passes_top_active_tags_into_system_message(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+    test_conversation,
+):
+    create_task(user_id=test_user.pk, name="Invoice", tags=["finance", "urgent"])
+    create_task(user_id=test_user.pk, name="Budget", tags=["finance"])
+    create_task(
+        user_id=test_user.pk,
+        name="Done",
+        status=TaskStatus.COMPLETED,
+        tags=["completed-only"],
+    )
+
+    scripted = CapturingTextLlm()
+
+    result = handle_user_incoming(
+        test_conversation,
+        "latest request",
+        llm_callable=scripted,
+    )
+
+    assert result.error is None
+    assert scripted.calls, "Expected the LLM callable to be invoked"
+
+    system_content = scripted.calls[0][0]["content"]
+    assert "## Tag Guidance" in system_content
+    assert "- finance" in system_content
+    assert "- urgent" in system_content
+    assert "- completed-only" not in system_content
 
 
 @pytest.mark.django_db

@@ -14,6 +14,7 @@ from agent.utils import history_from_message_logs
 from taskraptor.timezones import local_now_context
 from channels.models import Channel, Conversation
 from channels.services import get_conversation, touch_conversation
+from tasks.services import top_active_tags_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,9 @@ def handle_user_incoming(
             timezone=local_context["timezone"],
             local_now=local_context["local_now"],
             local_date=local_context["local_date"],
+            top_tags=[
+                tag for tag, _count in top_active_tags_for_user(user_id, limit=20)
+            ],
         )
         result = run_agent(
             user_id=user_id,

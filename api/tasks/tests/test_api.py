@@ -211,6 +211,7 @@ def test_facets_status_and_tags(client):
 
     token = _register_and_token(client, "d@example.com")
     u = User.objects.get(email="d@example.com")
+    other = User.objects.create_user("facets-other@example.com", "secret123")
     create_task(
         user_id=u.pk,
         name="T1",
@@ -223,13 +224,49 @@ def test_facets_status_and_tags(client):
         status=TaskStatus.PENDING,
         tags=["work"],
     )
+    create_task(
+        user_id=u.pk,
+        name="Completed",
+        status=TaskStatus.COMPLETED,
+        tags=["work", "done"],
+    )
+    create_task(
+        user_id=u.pk,
+        name="Cancelled",
+        status=TaskStatus.CANCELLED,
+        tags=["cancelled"],
+    )
+    archived = create_task(
+        user_id=u.pk,
+        name="Archived",
+        status=TaskStatus.PENDING,
+        tags=["archived"],
+    )
+    archived.archived_at = timezone.now()
+    archived.save(update_fields=["archived_at"])
+    deleted = create_task(
+        user_id=u.pk,
+        name="Deleted",
+        status=TaskStatus.PENDING,
+        tags=["deleted"],
+    )
+    deleted.deleted_at = timezone.now()
+    deleted.save(update_fields=["deleted_at"])
+    create_task(user_id=other.pk, name="Other", tags=["other"])
 
     r = client.get(FACETS_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
     assert r.status_code == 200
     data = r.json()
-    assert data["total"] == 2
+    assert data["total"] == 5
     by_status = {s["status"]: s["count"] for s in data["status_counts"]}
-    assert by_status[TaskStatus.PENDING] == 2
+    assert by_status[TaskStatus.PENDING] == 3
+    assert by_status[TaskStatus.COMPLETED] == 1
+    assert by_status[TaskStatus.CANCELLED] == 1
     by_tag = {t["tag"]: t["count"] for t in data["tag_counts"]}
     assert by_tag["work"] == 2
     assert by_tag["a"] == 1
+    assert "done" not in by_tag
+    assert "cancelled" not in by_tag
+    assert "archived" not in by_tag
+    assert "deleted" not in by_tag
+    assert "other" not in by_tag

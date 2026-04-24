@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from uuid import UUID
 
 from django.db import connection
@@ -20,6 +19,7 @@ from tasks.schemas import (
     TaskListOut,
     TaskOut,
 )
+from tasks.services import top_active_tags_for_user
 from taskraptor.timezones import serialize_datetime_with_local
 
 router = Router(tags=["tasks"], auth=AuthBearer())
@@ -73,15 +73,9 @@ def task_facets(request: AuthedHttpRequest):
         for row in status_qs
     ]
 
-    # Aggregate tag frequencies in Python; tags are JSON list of strings
-    tag_counter: Counter[str] = Counter()
-    for tags in base.values_list("tags", flat=True):
-        if isinstance(tags, list):
-            for t in tags:
-                tag_counter[str(t)] += 1
     tag_counts = [
         TagCountItem(tag=tag, count=n)
-        for tag, n in sorted(tag_counter.items(), key=lambda x: (-x[1], x[0]))
+        for tag, n in top_active_tags_for_user(user.pk)
     ]
 
     return Status(

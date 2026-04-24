@@ -10,12 +10,18 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
 import { clearToken } from "@/lib/auth"
+import {
+  createChatConversation,
+  fetchChatConversations,
+  type ChatConversation,
+} from "@/lib/chat"
 import { fetchTaskFacets, type TaskFacets } from "@/lib/tasks"
 import {
   IconCalendarEvent,
@@ -29,17 +35,16 @@ import {
   IconTag,
 } from "@tabler/icons-react"
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Pending",
-  in_progress: "In progress",
-  completed: "Done",
-  cancelled: "Cancelled",
+function getActiveConversationId(pathname: string): string | null {
+  const match = pathname.match(/^\/c\/([^/]+)/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
-function formatStatusSummary(facets: TaskFacets): string {
-  return facets.status_counts
-    .map((row) => `${STATUS_LABEL[row.status] ?? row.status}: ${row.count}`)
-    .join(" · ")
+function getConversationLabel(conversation: ChatConversation): string {
+  if (conversation.title.trim()) return conversation.title
+  const latest = conversation.latest_message?.content.trim()
+  if (latest) return latest
+  return "New chat"
 }
 
 export function AppSidebar() {
@@ -49,6 +54,11 @@ export function AppSidebar() {
   const activeTag = searchParams.get("tag")
 
   const [facets, setFacets] = useState<TaskFacets | null>(null)
+  const [conversations, setConversations] = useState<ChatConversation[]>([])
+  const [chatLoading, setChatLoading] = useState(true)
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [creatingChat, setCreatingChat] = useState(false)
+  const [tagsExpanded, setTagsExpanded] = useState(false)
 
   const loadFacets = useCallback(async () => {
     try {
@@ -65,6 +75,25 @@ export function AppSidebar() {
     }
   }, [navigate])
 
+  const loadConversations = useCallback(async () => {
+    setChatError(null)
+    try {
+      const data = await fetchChatConversations(20)
+      setConversations(data.conversations)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load conversations"
+      if (msg === "SESSION_EXPIRED") {
+        clearToken()
+        navigate("/login", { replace: true })
+        return
+      }
+      setChatError(msg)
+      setConversations([])
+    } finally {
+      setChatLoading(false)
+    }
+  }, [navigate])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -76,13 +105,59 @@ export function AppSidebar() {
     }
   }, [loadFacets])
 
+  useEffect(() => {
+    let cancelled = false
+    setChatLoading(true)
+    ;(async () => {
+      await loadConversations()
+      if (cancelled) return
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [loadConversations])
+
+  useEffect(() => {
+    const handleChatUpdated = () => {
+      void loadConversations()
+    }
+    window.addEventListener("taskraptor:chat-updated", handleChatUpdated)
+    return () => {
+      window.removeEventListener("taskraptor:chat-updated", handleChatUpdated)
+    }
+  }, [loadConversations])
+
   function handleLogout() {
     clearToken()
     navigate("/login", { replace: true })
   }
 
+  async function handleNewChat() {
+    setCreatingChat(true)
+    setChatError(null)
+    try {
+      const conversation = await createChatConversation()
+      await loadConversations()
+      navigate(`/c/${conversation.id}`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to create conversation"
+      if (msg === "SESSION_EXPIRED") {
+        clearToken()
+        navigate("/login", { replace: true })
+        return
+      }
+      setChatError(msg)
+    } finally {
+      setCreatingChat(false)
+    }
+  }
+
   const allTasksActive = pathname === "/tasks" && !activeTag
   const upcomingActive = pathname === "/tasks/upcoming"
+  const activeConversationId = getActiveConversationId(pathname)
+  const tagCounts = facets?.tag_counts ?? []
+  const visibleTagCounts = tagCounts.slice(0, tagsExpanded ? 10 : 5)
+  const canToggleTags = tagCounts.length > 5
 
   return (
     <Sidebar>
@@ -99,9 +174,9 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton type="button">
+                <SidebarMenuButton type="button" onClick={handleNewChat} disabled={creatingChat}>
                   <IconMessagePlus />
-                  <span>New Chat</span>
+                  <span>{creatingChat ? "Creating..." : "New Chat"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -109,11 +184,39 @@ export function AppSidebar() {
               Recent conversations
             </p>
             <SidebarMenu className="mt-1">
-              <SidebarMenuItem>
-                <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
-                  <span className="truncate">No conversations yet</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {chatLoading ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
+                    <span className="truncate">Loading chats...</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : chatError ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton type="button" size="sm" className="text-destructive">
+                    <span className="truncate">Could not load chats</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : conversations.length > 0 ? (
+                conversations.map((conversation) => (
+                  <SidebarMenuItem key={conversation.id}>
+                    <SidebarMenuButton
+                      asChild
+                      size="sm"
+                      isActive={activeConversationId === conversation.id}
+                    >
+                      <NavLink to={`/c/${conversation.id}`}>
+                        <span className="truncate">{getConversationLabel(conversation)}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
+                    <span className="truncate">No conversations yet</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -148,29 +251,20 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            {facets != null && facets.status_counts.length > 0 ? (
-              <p className="text-muted-foreground px-3 pt-2 text-xs leading-snug">
-                {formatStatusSummary(facets)}
-              </p>
-            ) : null}
             <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">Tags</p>
             <SidebarMenu className="mt-1">
-              {facets != null && facets.tag_counts.length > 0 ? (
-                facets.tag_counts.map((row) => {
+              {visibleTagCounts.length > 0 ? (
+                visibleTagCounts.map((row) => {
                   const isTagActive = pathname === "/tasks" && activeTag === row.tag
                   return (
                     <SidebarMenuItem key={row.tag}>
-                      <SidebarMenuButton asChild isActive={isTagActive} size="sm">
+                      <SidebarMenuButton asChild isActive={isTagActive} size="sm" className="pr-9">
                         <NavLink to={`/tasks?tag=${encodeURIComponent(row.tag)}`}>
                           <IconTag className="size-3.5" />
-                          <span>
-                            {row.tag}
-                            <span className="text-muted-foreground ml-1 font-normal">
-                              ({row.count})
-                            </span>
-                          </span>
+                          <span className="truncate">{row.tag}</span>
                         </NavLink>
                       </SidebarMenuButton>
+                      <SidebarMenuBadge>{row.count}</SidebarMenuBadge>
                     </SidebarMenuItem>
                   )
                 })
@@ -181,6 +275,18 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              {canToggleTags ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    type="button"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => setTagsExpanded((expanded) => !expanded)}
+                  >
+                    <span>{tagsExpanded ? "Show fewer" : "Show 5 more"}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -69,7 +69,10 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of tag strings.",
+                        "description": (
+                            "Concise tag strings. Prefer existing top tags from the system "
+                            "prompt; create a new short lowercase tag only when none fit."
+                        ),
                     },
                 },
                 "required": ["name"],
@@ -110,6 +113,11 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
+                        "description": (
+                            "Full replacement list of concise tag strings. Prefer existing "
+                            "top tags from the system prompt; create a new short lowercase "
+                            "tag only when none fit."
+                        ),
                     },
                 },
                 "required": ["task_id"],

@@ -13,6 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from channels.models import Channel, ChannelType, TelegramJoinCode
+from channels.telegram_format import markdown_to_telegram_html
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,11 @@ def send_telegram_message(chat_id: str, text: str) -> dict:
     Raises ``RuntimeError`` on HTTP errors or Telegram ``ok: false`` responses.
     """
     payload = json.dumps(
-        {"chat_id": chat_id, "text": text},
+        {
+            "chat_id": chat_id,
+            "text": markdown_to_telegram_html(text),
+            "parse_mode": "HTML",
+        },
         ensure_ascii=False,
     ).encode("utf-8")
     req = urllib.request.Request(

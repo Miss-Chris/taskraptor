@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
 from django.test import Client
+from django.test import override_settings
 
+from channels.telegram import send_telegram_message
+from channels.telegram_format import markdown_to_telegram_html
 from channels.tasks import process_telegram_join, process_telegram_text
 from channels.telegram_handlers import (
     JOIN_FAILURE_MESSAGE,
@@ -16,7 +20,11 @@ from channels.telegram_handlers import (
     handle_telegram_text,
     safe_send_telegram_message,
 )
-from channels.telegram_webhook import IGNORE_EVENT, TelegramWebhookEvent, parse_telegram_webhook_body
+from channels.telegram_webhook import (
+    IGNORE_EVENT,
+    TelegramWebhookEvent,
+    parse_telegram_webhook_body,
+)
 from channels.workflow import NoActiveLlmModel
 
 WEBHOOK_URL = "/api/telegram/webhook"
@@ -25,6 +33,50 @@ WEBHOOK_URL = "/api/telegram/webhook"
 @pytest.fixture
 def client() -> Client:
     return Client()
+
+
+def test_markdown_to_telegram_html_converts_common_assistant_formatting():
+    text = "Done! **||Buy oranges||**\n\nUse `milk <2%>` and _soon_."
+
+    assert markdown_to_telegram_html(text) == (
+        "Done! <b><tg-spoiler>Buy oranges</tg-spoiler></b>\n\n"
+        "Use <code>milk &lt;2%&gt;</code> and <i>soon</i>."
+    )
+
+
+@override_settings(TELEGRAM_BOT_TOKEN="test-token")
+def test_send_telegram_message_uses_html_parse_mode(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"ok": true, "result": {"message_id": 1}}'
+
+    def fake_urlopen(req, timeout):
+        requests.append((req, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr("channels.telegram.urllib.request.urlopen", fake_urlopen)
+
+    result = send_telegram_message("123", "Done! **Buy oranges**")
+
+    assert result["ok"] is True
+    assert len(requests) == 1
+    req, timeout = requests[0]
+    assert timeout == 30
+    assert req.headers["Content-type"] == "application/json"
+    payload = json.loads(req.data.decode("utf-8"))
+    assert payload == {
+        "chat_id": "123",
+        "text": "Done! <b>Buy oranges</b>",
+        "parse_mode": "HTML",
+    }
 
 
 def test_parse_telegram_webhook_body_invalid_json_returns_ignore():

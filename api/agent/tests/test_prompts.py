@@ -34,3 +34,14 @@ def test_build_system_prompt_includes_user_local_time_context():
     assert "local_now: 2026-04-10T09:30:00-04:00" in prompt
     assert "local_date: 2026-04-10" in prompt
     assert "backend tools handle timezone conversion" in prompt
+
+
+def test_build_system_prompt_includes_top_tag_guidance():
+    prompt = build_system_prompt("", top_tags=["work", "finance"])
+
+    assert "## Tag Guidance" in prompt
+    assert "Prefer reusing these existing top tags" in prompt
+    assert "- work" in prompt
+    assert "- finance" in prompt
+    assert "Create a new short lowercase tag only when none of these fit." in prompt
+    assert "Avoid over-tagging" in prompt
