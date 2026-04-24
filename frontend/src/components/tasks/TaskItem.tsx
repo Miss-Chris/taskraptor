@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom"
 
 import type { Task } from "@/lib/tasks"
-import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { cn } from "@/lib/utils"
 
@@ -33,7 +32,6 @@ function TaskItemContent({ task }: { task: Task }) {
           <span className="truncate font-medium text-foreground">
             {task.name}
           </span>
-          <TaskStatusBadge status={task.status} />
         </div>
         {task.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
@@ -56,6 +54,13 @@ function TaskItemContent({ task }: { task: Task }) {
   )
 }
 
+const STATUS_BORDER_CLASS: Record<Task["status"], string> = {
+  pending: "border-l-amber-400",
+  in_progress: "border-l-sky-400",
+  completed: "border-l-emerald-400",
+  cancelled: "border-l-muted-foreground/50",
+}
+
 export function TaskItem({
   task,
   className,
@@ -68,8 +73,9 @@ export function TaskItem({
   onSelect?: (task: Task) => void
 }) {
   const itemClassName = cn(
-    "flex w-full flex-col gap-2 rounded-lg border border-border bg-card/40 px-4 py-3 text-left transition-colors hover:bg-accent/30 md:flex-row md:items-center md:justify-between",
-    selected && "border-primary/50 bg-accent/60",
+    "flex w-full flex-col gap-2 rounded-lg border border-l-4 border-border bg-card/40 px-4 py-3 text-left transition-colors hover:bg-accent/30 md:flex-row md:items-center md:justify-between",
+    STATUS_BORDER_CLASS[task.status],
+    selected && "bg-accent/60 ring-1 ring-primary/50",
     className
   )
 

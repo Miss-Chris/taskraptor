@@ -1,28 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import {
-  IconChevronRight,
-  IconCircle,
-  IconCircleCheck,
-  IconClockHour4,
-  IconInbox,
-  IconListDetails,
-  IconTag,
-} from "@tabler/icons-react"
+import { IconChevronRight, IconListDetails } from "@tabler/icons-react"
 
 import { TaskList } from "@/components/tasks/TaskList"
-import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { Skeleton } from "@/components/ui/skeleton"
 import { clearToken } from "@/lib/auth"
 import {
   fetchTask,
   fetchTaskAuditLogs,
-  fetchTaskFacets,
   fetchTasks,
   type Task,
   type TaskAuditLog,
-  type TaskFacets,
 } from "@/lib/tasks"
 import { cn } from "@/lib/utils"
 
@@ -33,13 +22,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
 ]
-
-const STATUS_ICON: Record<string, typeof IconCircle> = {
-  pending: IconCircle,
-  in_progress: IconClockHour4,
-  completed: IconCircleCheck,
-  cancelled: IconCircle,
-}
 
 function formatTs(iso: string | null): string {
   if (!iso) return "None"
@@ -69,12 +51,6 @@ function formatAuditAction(action: string): string {
   return labels[action] ?? action.replace(/_/g, " ")
 }
 
-function scopeCount(facets: TaskFacets | null, status: string): number | null {
-  if (!facets) return null
-  if (!status) return facets.total
-  return facets.status_counts.find((row) => row.status === status)?.count ?? 0
-}
-
 function DetailRow({
   label,
   value,
@@ -87,6 +63,29 @@ function DetailRow({
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-sm font-medium">{value}</dd>
     </div>
+  )
+}
+
+const STATUS_LABEL: Record<Task["status"], string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+}
+
+const STATUS_DOT_CLASS: Record<Task["status"], string> = {
+  pending: "bg-amber-400",
+  in_progress: "bg-sky-400",
+  completed: "bg-emerald-400",
+  cancelled: "bg-muted-foreground",
+}
+
+function TaskStatusIndicator({ status }: { status: Task["status"] }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+      <span className={cn("size-2 rounded-full", STATUS_DOT_CLASS[status])} />
+      {STATUS_LABEL[status] ?? status.replace(/_/g, " ")}
+    </span>
   )
 }
 
@@ -119,8 +118,6 @@ export function TasksPage() {
   const status = searchParams.get("status") ?? ""
   const requestedTaskId = searchParams.get("task")
 
-  const [facets, setFacets] = useState<TaskFacets | null>(null)
-  const [facetsError, setFacetsError] = useState<string | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [tasksLoading, setTasksLoading] = useState(true)
   const [tasksError, setTasksError] = useState<string | null>(null)
@@ -154,19 +151,6 @@ export function TasksPage() {
     [navigate]
   )
 
-  const loadFacets = useCallback(async () => {
-    setFacetsError(null)
-    try {
-      const data = await fetchTaskFacets()
-      setFacets(data)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load task summary"
-      if (handleSessionError(msg)) return
-      setFacetsError(msg)
-      setFacets(null)
-    }
-  }, [handleSessionError])
-
   const loadTasks = useCallback(async () => {
     setTasksLoading(true)
     setTasksError(null)
@@ -185,10 +169,6 @@ export function TasksPage() {
       setTasksLoading(false)
     }
   }, [handleSessionError, status, tag])
-
-  useEffect(() => {
-    void loadFacets()
-  }, [loadFacets])
 
   useEffect(() => {
     void loadTasks()
@@ -254,14 +234,6 @@ export function TasksPage() {
     setSearchParams(nextParams, { replace: true })
   }
 
-  function selectStatus(nextStatus: string) {
-    updateFilters({ status: nextStatus, tag: "", task: null })
-  }
-
-  function selectTag(nextTag: string) {
-    updateFilters({ status: "", tag: nextTag, task: null })
-  }
-
   function selectTask(task: Task) {
     updateFilters({ task: task.id })
   }
@@ -277,99 +249,7 @@ export function TasksPage() {
       : "All tasks"
 
   return (
-    <div className="grid h-full min-h-[calc(100vh-7rem)] w-full gap-4 lg:grid-cols-[16rem_minmax(22rem,1fr)_minmax(22rem,0.95fr)]">
-      <aside className="overflow-hidden rounded-lg border border-border bg-card/40">
-        <div className="border-b border-border px-4 py-3">
-          <h1 className="text-base font-semibold">Tasks</h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Browse by scope or tag.
-          </p>
-        </div>
-        <div className="space-y-5 p-3">
-          <nav aria-label="Task scopes" className="space-y-1">
-            {STATUS_OPTIONS.map((option) => {
-              const Icon = (option.value ? STATUS_ICON[option.value] : undefined) ?? IconInbox
-              const active = status === option.value
-              const count = scopeCount(facets, option.value)
-              return (
-                <button
-                  key={option.value || "all"}
-                  type="button"
-                  className={cn(
-                    "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-accent",
-                    active && "bg-accent text-accent-foreground"
-                  )}
-                  onClick={() => selectStatus(option.value)}
-                >
-                  <Icon className="size-4 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {option.label}
-                  </span>
-                  {count != null ? (
-                    <span className="text-xs text-muted-foreground">
-                      {count}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </nav>
-
-          <section>
-            <div className="mb-2 flex items-center justify-between px-2">
-              <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Tags
-              </h2>
-              {tag ? (
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => selectTag("")}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-            {facetsError ? (
-              <p className="px-2 text-xs text-destructive">{facetsError}</p>
-            ) : facets == null ? (
-              <div className="space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-8 w-full rounded-md" />
-                ))}
-              </div>
-            ) : facets.tag_counts.length > 0 ? (
-              <nav aria-label="Task tags" className="space-y-1">
-                {facets.tag_counts.map((row) => {
-                  const active = tag === row.tag
-                  return (
-                    <button
-                      key={row.tag}
-                      type="button"
-                      className={cn(
-                        "flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-accent",
-                        active && "bg-accent text-accent-foreground"
-                      )}
-                      onClick={() => selectTag(row.tag)}
-                    >
-                      <IconTag className="size-4 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{row.tag}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {row.count}
-                      </span>
-                    </button>
-                  )
-                })}
-              </nav>
-            ) : (
-              <p className="px-2 text-sm text-muted-foreground">
-                No active tags yet.
-              </p>
-            )}
-          </section>
-        </div>
-      </aside>
-
+    <div className="grid h-full min-h-[calc(100vh-7rem)] w-full gap-4 lg:grid-cols-[minmax(24rem,0.9fr)_minmax(24rem,1.1fr)]">
       <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-lg border border-border bg-card/40">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
@@ -416,7 +296,7 @@ export function TasksPage() {
                     <h2 className="min-w-0 flex-1 text-lg leading-snug font-semibold">
                       {selectedTask.name}
                     </h2>
-                    <TaskStatusBadge status={selectedTask.status} />
+                    <TaskStatusIndicator status={selectedTask.status} />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedTask.tags.length > 0 ? (
