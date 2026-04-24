@@ -8,7 +8,7 @@ from uuid import UUID
 from django.utils import timezone
 
 from accounts.models import User
-from tasks.models import AuditAction, DueType, Task, TaskAuditLog, TaskStatus
+from tasks.models import AuditAction, DueType, Task, TaskAuditLog, TaskStatus, UserTag
 from taskraptor.timezones import normalize_to_utc
 
 UNSET = object()
@@ -34,6 +34,17 @@ def top_active_tags_for_user(
                     tag_counter[tag] += 1
 
     ranked = sorted(tag_counter.items(), key=lambda item: (-item[1], item[0]))
+    seen = {tag for tag, _count in ranked}
+    catalog_tags = UserTag.objects.filter(user_id=user_id).order_by(
+        "sort_order",
+        "name",
+    )
+    for user_tag in catalog_tags:
+        tag = user_tag.name.strip()
+        if tag and tag not in seen:
+            ranked.append((tag, 0))
+            seen.add(tag)
+
     if limit is None:
         return ranked
     return ranked[:limit]

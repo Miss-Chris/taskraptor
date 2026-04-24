@@ -416,7 +416,7 @@ export function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[calc(100svh-8rem)] items-center justify-center">
+      <div className="flex h-full min-h-0 items-center justify-center">
         <p className="text-muted-foreground text-sm">Loading chat...</p>
       </div>
     )
@@ -424,7 +424,7 @@ export function ChatPage() {
 
   if (notFound) {
     return (
-      <div className="mx-auto flex min-h-[calc(100svh-8rem)] w-full max-w-lg flex-col items-center justify-center gap-4 text-center">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-col items-center justify-center gap-4 text-center">
         <IconAlertTriangle className="text-muted-foreground size-8" />
         <div className="space-y-2">
           <h1 className="text-xl font-semibold tracking-tight">Conversation not found</h1>
@@ -441,7 +441,7 @@ export function ChatPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100svh-7rem)] w-full max-w-4xl flex-1 flex-col">
+    <div className="flex h-full min-h-0 w-full max-w-none flex-1 flex-col">
       <header className="border-border flex shrink-0 items-start justify-between gap-4 border-b pb-4">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-semibold tracking-tight">
@@ -455,7 +455,7 @@ export function ChatPage() {
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-4">
         {messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-16 text-center">
             <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">

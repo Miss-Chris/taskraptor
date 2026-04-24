@@ -6,6 +6,7 @@ api = NinjaAPI(title="TaskRaptor API", version="1.0.0")
 def register_routers():
     from accounts.api import router as auth_router
     from agent.api import router as debug_router
+    from agent.usage_api import router as usage_router
     from automations.api import router as automations_router
     from channels.web_api import router as chat_router
     from channels.api import router as telegram_router
@@ -17,6 +18,7 @@ def register_routers():
     api.add_router("/debug", debug_router)
     api.add_router("/telegram", telegram_router)
     api.add_router("/tasks", tasks_router)
+    api.add_router("/usage", usage_router)
 
 
 register_routers()

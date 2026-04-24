@@ -24,6 +24,30 @@ class AuditAction(models.TextChoices):
     DELETED = "deleted", "Deleted"
 
 
+class UserTag(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="task_tags",
+    )
+    name = models.CharField(max_length=64)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"],
+                name="tasks_usertag_user_name_uniq",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 def _normalize_tags(tags):
     """Compare tags as sorted strings; treats non-list JSON as empty."""
     if tags is None:

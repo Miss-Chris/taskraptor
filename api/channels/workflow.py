@@ -80,7 +80,7 @@ def handle_user_incoming(
     if agent_run is None:
         llm_model = (
             LlmModel.objects.filter(user_id=user_id, is_active=True)
-            .order_by("-created_at")
+            .order_by("model_key", "-created_at")
             .first()
         )
         if llm_model is None:

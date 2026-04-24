@@ -139,12 +139,17 @@ function MessageLogTable({ logs }: { logs: DebugMessageLog[] }) {
   }
   return (
     <div className="overflow-auto rounded-md border">
-      <table className="w-full min-w-[640px] text-left text-xs">
+      <table className="w-full min-w-[760px] table-fixed text-left text-xs">
+        <colgroup>
+          <col className="w-[11rem]" />
+          <col className="w-[14rem]" />
+          <col />
+          <col className="w-[13rem]" />
+        </colgroup>
         <thead className="bg-muted text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-medium">Time</th>
-            <th className="px-3 py-2 font-medium">Actor</th>
-            <th className="px-3 py-2 font-medium">Tool</th>
+            <th className="px-3 py-2 font-medium">Actor / Tool</th>
             <th className="min-w-0 px-3 py-2 font-medium">Content</th>
             <th className="w-32 whitespace-nowrap px-3 py-2 font-medium">Metadata</th>
           </tr>
@@ -158,17 +163,18 @@ function MessageLogTable({ logs }: { logs: DebugMessageLog[] }) {
                   {formatDate(log.created_at)}
                 </td>
                 <td className="px-3 py-2">
-                  <span className="rounded-md border border-border/80 bg-background/50 px-1.5 py-0.5">
-                    {log.actor}
-                  </span>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className="rounded-md border border-border/80 bg-background/50 px-1.5 py-0.5 font-medium">
+                      {log.actor}
+                    </span>
+                    {log.tool_name ? (
+                      <span className="min-w-0 truncate font-medium">{log.tool_name}</span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
                 </td>
-                <td className="px-3 py-2">
-                  <div className="font-medium">{log.tool_name || "—"}</div>
-                  {log.tool_call_id ? (
-                    <div className="text-muted-foreground font-mono text-[0.65rem]">{log.tool_call_id}</div>
-                  ) : null}
-                </td>
-                <td className="min-w-0 max-w-[min(100%,48rem)] px-3 py-2">
+                <td className="min-w-0 px-3 py-2">
                   <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words">{log.content}</p>
                 </td>
                 <td className="px-3 py-2 align-top">
@@ -177,7 +183,7 @@ function MessageLogTable({ logs }: { logs: DebugMessageLog[] }) {
                       <summary className="text-muted-foreground cursor-pointer list-none text-[0.65rem] underline decoration-dotted underline-offset-2 [&::-webkit-details-marker]:hidden">
                         View
                       </summary>
-                      <pre className="bg-muted/80 mt-2 max-h-40 max-w-xs overflow-auto rounded border p-2 text-[0.65rem] leading-relaxed">
+                      <pre className="bg-muted/80 mt-2 max-h-40 max-w-full overflow-auto rounded border p-2 text-[0.65rem] leading-relaxed">
                         {JSON.stringify(log.metadata, null, 2)}
                       </pre>
                     </details>
@@ -388,7 +394,7 @@ export function DebugPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+    <div className="flex w-full max-w-none flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-semibold">

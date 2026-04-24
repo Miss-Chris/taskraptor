@@ -274,6 +274,22 @@ def test_get_task_audit_logs_empty(client):
 
 
 @pytest.mark.django_db
+def test_facets_include_default_tags_for_new_user(client):
+    token = _register_and_token(client, "default-facets@example.com")
+
+    r = client.get(FACETS_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 0
+    assert data["tag_counts"] == [
+        {"tag": "work", "count": 0},
+        {"tag": "personal", "count": 0},
+        {"tag": "family", "count": 0},
+    ]
+
+
+@pytest.mark.django_db
 def test_facets_status_and_tags(client):
     from accounts.models import User
 
@@ -333,6 +349,8 @@ def test_facets_status_and_tags(client):
     by_tag = {t["tag"]: t["count"] for t in data["tag_counts"]}
     assert by_tag["work"] == 2
     assert by_tag["a"] == 1
+    assert by_tag["personal"] == 0
+    assert by_tag["family"] == 0
     assert "done" not in by_tag
     assert "cancelled" not in by_tag
     assert "archived" not in by_tag

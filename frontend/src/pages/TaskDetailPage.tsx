@@ -46,7 +46,7 @@ export function TaskDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-4xl">
         <p className="text-muted-foreground text-sm">Loading…</p>
       </div>
     )
@@ -54,7 +54,7 @@ export function TaskDetailPage() {
 
   if (error || !task) {
     return (
-      <div className="mx-auto w-full max-w-2xl space-y-4">
+      <div className="mx-auto w-full max-w-4xl space-y-4">
         <p className="text-destructive text-sm" role="alert">
           {error ?? "Could not load task."}
         </p>
@@ -66,7 +66,7 @@ export function TaskDetailPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-4xl space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" variant="outline" size="sm" asChild>
           <Link to="/tasks">← All tasks</Link>

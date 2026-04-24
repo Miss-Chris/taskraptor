@@ -66,8 +66,10 @@ def test_create_list_and_detail_automations_are_user_scoped(client):
 
     list_response = client.get(AUTOMATIONS_URL, **_auth(token))
     assert list_response.status_code == 200
-    assert list_response.json()["count"] == 1
-    assert [row["id"] for row in list_response.json()["automations"]] == [created["id"]]
+    assert list_response.json()["count"] == 3
+    assert created["id"] in [
+        row["id"] for row in list_response.json()["automations"]
+    ]
 
     detail_response = client.get(f"/api/automations/{created['id']}", **_auth(token))
     assert detail_response.status_code == 200
@@ -92,8 +94,13 @@ def test_list_includes_inactive_automations(client):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["count"] == 1
-    assert data["automations"][0]["is_active"] is False
+    assert data["count"] == 3
+    paused = [
+        automation
+        for automation in data["automations"]
+        if automation["prompt"] == "Paused"
+    ][0]
+    assert paused["is_active"] is False
 
 
 @pytest.mark.django_db

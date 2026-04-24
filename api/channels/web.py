@@ -36,7 +36,7 @@ def create_web_conversation(channel: Channel, title: str = "") -> Conversation:
 def _active_llm_model_for_user(user: User) -> LlmModel:
     llm_model = (
         LlmModel.objects.filter(user=user, is_active=True)
-        .order_by("-created_at")
+        .order_by("model_key", "-created_at")
         .first()
     )
     if llm_model is None:

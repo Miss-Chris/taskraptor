@@ -95,7 +95,7 @@ export function AutomationsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5">
+    <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Automations</h1>

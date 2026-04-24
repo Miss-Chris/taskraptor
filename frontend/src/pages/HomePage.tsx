@@ -42,7 +42,7 @@ export function HomePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg">
+    <div className="mx-auto w-full max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle>Home</CardTitle>

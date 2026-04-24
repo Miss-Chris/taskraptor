@@ -107,6 +107,11 @@ class LlmModel(models.Model):
                 condition=models.Q(model_key=SYSTEM_FREE_MODEL_KEY),
                 name="agent_llmmodel_unique_system_free_per_user",
             ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(is_active=True),
+                name="agent_llmmodel_unique_active_per_user",
+            ),
         ]
         indexes = [
             models.Index(fields=["user", "model_key"]),
@@ -250,11 +255,14 @@ def get_or_create_system_model(user) -> LlmModel:
     Return the system_free LlmModel for ``user``, creating it if absent.
 
     Safe to call multiple times — the unique constraint on (user, system_free)
-    guarantees at most one row per user.  quota=None means no token cap.
+    guarantees at most one row per user.  quota=None means no token cap. The
+    system model is active by default only when the user has no active model.
     """
     model, _ = LlmModel.objects.get_or_create(
         user=user,
         model_key=SYSTEM_FREE_MODEL_KEY,
-        defaults={"is_active": True},
+        defaults={
+            "is_active": not LlmModel.objects.filter(user=user, is_active=True).exists(),
+        },
     )
     return model

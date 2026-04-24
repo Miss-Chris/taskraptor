@@ -8,6 +8,7 @@ from ninja import Router, Status
 from accounts.bearer import AuthBearer
 from accounts.models import User, UserSession
 from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut, UserTimezoneIn
+from accounts.services import seed_default_user_data
 from agent.models import get_or_create_system_model
 from taskraptor.timezones import is_valid_timezone
 
@@ -29,6 +30,7 @@ def register(request, payload: RegisterIn):
         password=payload.password,
     )
     get_or_create_system_model(user)
+    seed_default_user_data(user)
     session = UserSession.objects.create(
         user=user,
         expires_at=_default_session_expiry(),
