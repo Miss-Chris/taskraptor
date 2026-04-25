@@ -8,7 +8,8 @@ x-default-logging: &default-logging
 
 x-api-env: &api-env
   env_file:
-    - ./env.txt
+    - path: ./.env
+      required: false
   environment:
     DJANGO_SETTINGS_MODULE: taskraptor.settings.production
   logging: *default-logging
@@ -20,6 +21,9 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+        VITE_SENTRY_SEND_DEFAULT_PII: ${VITE_SENTRY_SEND_DEFAULT_PII:-}
     container_name: taskraptor_caddy
     ports:
       - "80:80"
@@ -33,11 +37,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: taskraptor_redis
-    env_file:
-      - ./env.txt
-    command: >
-      sh -c ': "$${REDIS_PASSWORD:?REDIS_PASSWORD is required}" &&
-      redis-server --requirepass "$${REDIS_PASSWORD}"'
     restart: unless-stopped
     logging: *default-logging
     networks:
@@ -46,7 +45,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          'redis-cli -a "$${REDIS_PASSWORD}" --no-auth-warning ping | grep PONG',
+          "redis-cli ping | grep PONG",
         ]
       interval: 10s
       timeout: 3s

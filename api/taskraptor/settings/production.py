@@ -1,5 +1,6 @@
-from decouple import Csv, config
+from decouple import Csv
 
+from .env import config
 from .local import *  # noqa: F401, F403
 
 SECRET_KEY = config("SECRET_KEY")
@@ -44,13 +45,7 @@ DATABASES = {
     }
 }
 
-_redis_password = config("REDIS_PASSWORD", default="")
-_default_redis_url = (
-    f"redis://:{_redis_password}@redis:6379/0"
-    if _redis_password
-    else "redis://redis:6379/0"
-)
-CELERY_BROKER_URL = config("CELERY_BROKER_URL", default=_default_redis_url)
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://redis:6379/0")
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default=CELERY_BROKER_URL)
 
 LOGGING = {

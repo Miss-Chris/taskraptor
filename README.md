@@ -14,14 +14,14 @@ From [`/Users/anirudh/work/taskraptor/api`](/Users/anirudh/work/taskraptor/api):
 
 ```bash
 uv sync
-printf 'SECRET_KEY=unsafe-local-dev-secret-key\n' > .env
 uv run python manage.py migrate
 uv run python manage.py runserver
 ```
 
 For local development, the checked-in settings use an unsafe fallback `SECRET_KEY`
-if `.env` is absent. Create `api/.env` when you want local API keys, Telegram
-settings, or database overrides.
+if the root `.env` is absent. Create `/Users/anirudh/work/taskraptor/.env` when
+you want local API keys, Telegram settings, database overrides, or frontend
+`VITE_*` build values.
 
 Celery assumes a local Redis server is available at `redis://127.0.0.1:6379/0` unless `CELERY_BROKER_URL` is set.
 

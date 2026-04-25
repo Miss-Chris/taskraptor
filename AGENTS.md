@@ -55,7 +55,7 @@ Notes:
 
 - Default test runs exclude `live_api` tests.
 - `DJANGO_SETTINGS_MODULE` for pytest is already configured as `taskraptor.settings.test`.
-- A local `.env` exists under `api/`; treat it as developer-specific and do not commit secrets.
+- A local `.env` may exist at the repo root; treat it as developer-specific and do not commit secrets.
 
 ## Agent Debug Introspection
 

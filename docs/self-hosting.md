@@ -58,17 +58,15 @@ Depending on your Docker and Postgres configuration, `PGHOST` may be the host pr
 Create the environment file:
 
 ```bash
-cp env.example env.txt
+cp env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(50))"
-python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Paste one generated value into `SECRET_KEY` and the other into `REDIS_PASSWORD`,
-then fill in the Postgres settings. At minimum, set:
+Paste the generated value into `SECRET_KEY`, then fill in the Postgres settings.
+At minimum, set:
 
 ```dotenv
 SECRET_KEY=
-REDIS_PASSWORD=
 PGHOST=
 PGPORT=5432
 PGDATABASE=taskraptor
@@ -81,6 +79,10 @@ The backend dependencies are installed inside the API image with `uv sync --froz
 The frontend is built inside the Caddy image with `npm ci && npm run build`, so the
 EC2 host does not need Python packages, Node packages, or prebuilt `frontend/dist`
 files outside Docker.
+
+Optional browser build settings such as `VITE_SENTRY_DSN` are read from `.env`
+at Docker build time. Changing a `VITE_*` value requires rebuilding the Caddy
+image because Vite bakes those values into the static frontend assets.
 
 Start the stack:
 
@@ -151,7 +153,7 @@ taskraptor.example.com {
 }
 ```
 
-Then update `env.txt`:
+Then update `.env`:
 
 ```dotenv
 ALLOWED_HOSTS=taskraptor.example.com,api
@@ -174,7 +176,7 @@ ports:
 
 ## Telegram Webhooks
 
-If you use Telegram, set these in `env.txt`:
+If you use Telegram, set these in `.env`:
 
 ```dotenv
 TELEGRAM_BOT_NAME=your_bot_name
@@ -223,15 +225,15 @@ system model. Users can still add their own supported provider keys from the app
 
 ## Redis
 
-Compose requires `REDIS_PASSWORD` and starts Redis with `--requirepass`. Django
-derives the default Celery broker/result URLs from that password:
+Compose starts a private Redis service on the Docker network. Django defaults
+the Celery broker/result URLs to:
 
 ```text
-redis://:<REDIS_PASSWORD>@redis:6379/0
+redis://redis:6379/0
 ```
 
 Only set `CELERY_BROKER_URL` or `CELERY_RESULT_BACKEND` if you are using an
-external Redis or another Celery backend.
+external Redis, Redis auth, or another Celery backend.
 
 ## Backups
 

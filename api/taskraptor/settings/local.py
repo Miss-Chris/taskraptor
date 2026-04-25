@@ -1,6 +1,15 @@
-from decouple import config
+import sentry_sdk
+
+from .env import config
 
 SECRET_KEY = config("SECRET_KEY", default="unsafe-local-dev-secret-key")
+SENTRY_DSN = config("SENTRY_DSN", default="")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        send_default_pii=config("SENTRY_SEND_DEFAULT_PII", default=True, cast=bool),
+    )
 
 # DeepSeek API key for platform `system_free` LLM configs (per-user quota on `LlmModel`).
 DEEPSEEK_API_KEY = config("DEEPSEEK_API_KEY", default="")

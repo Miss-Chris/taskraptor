@@ -16,6 +16,9 @@ This is the TaskRaptor frontend: Vite, React, TypeScript, Tailwind 4, and shadcn
    npm run dev
    ```
 
+   Vite reads optional `VITE_*` values from the repo-root `.env`. The file is
+   not required for local frontend development.
+
 3. Open the app, register or log in. Session tokens are stored in `localStorage` under `taskraptor_auth_token`.
 
 Routes:

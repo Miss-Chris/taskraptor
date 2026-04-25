@@ -3,6 +3,9 @@ FROM node:24-alpine AS frontend-build
 
 WORKDIR /app/frontend
 
+ARG VITE_SENTRY_DSN=
+ARG VITE_SENTRY_SEND_DEFAULT_PII=
+
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 

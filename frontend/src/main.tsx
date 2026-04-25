@@ -5,6 +5,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query"
+import * as Sentry from "@sentry/react"
 import { createRoot } from "react-dom/client"
 
 import "./index.css"
@@ -12,6 +13,15 @@ import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { endSession, isAuthError } from "@/lib/auth"
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN
+
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    sendDefaultPii: import.meta.env.VITE_SENTRY_SEND_DEFAULT_PII !== "false",
+  })
+}
 
 let redirectingForAuth = false
 
