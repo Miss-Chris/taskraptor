@@ -1,15 +1,17 @@
 from decouple import config
 
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = config("SECRET_KEY", default="unsafe-local-dev-secret-key")
 
 # DeepSeek API key for platform `system_free` LLM configs (per-user quota on `LlmModel`).
 DEEPSEEK_API_KEY = config("DEEPSEEK_API_KEY", default="")
 SYSTEM_FREE_MONTHLY_REQUEST_QUOTA = config("SYSTEM_FREE_MONTHLY_REQUEST_QUOTA", default=50, cast=int)
 USER_SESSION_TTL_DAYS = config("USER_SESSION_TTL_DAYS", default=30, cast=int)
+ALLOW_PUBLIC_REGISTRATION = config("ALLOW_PUBLIC_REGISTRATION", default=True, cast=bool)
 
 TELEGRAM_BOT_NAME = config("TELEGRAM_BOT_NAME", default="")
 TELEGRAM_BOT_TOKEN = config("TELEGRAM_BOT_TOKEN", default="")
 TELEGRAM_WEBHOOK_BASE_URL = config("TELEGRAM_WEBHOOK_BASE_URL", default="")
+TELEGRAM_WEBHOOK_SECRET = config("TELEGRAM_WEBHOOK_SECRET", default="")
 
 DEBUG = True
 

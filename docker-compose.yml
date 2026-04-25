@@ -9,8 +9,6 @@ x-default-logging: &default-logging
 x-api-env: &api-env
   env_file:
     - ./env.txt
-  volumes:
-    - ./env.txt:/app/.env:ro
   environment:
     DJANGO_SETTINGS_MODULE: taskraptor.settings.production
   logging: *default-logging
@@ -19,13 +17,14 @@ x-api-env: &api-env
 
 services:
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: taskraptor_caddy
     ports:
       - "80:80"
-    volumes:
-      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./frontend/dist:/srv/frontend:ro
+      # Uncomment when config/Caddyfile is switched to a real HTTPS domain.
+      # - "443:443"
     restart: unless-stopped
     logging: *default-logging
     networks:
@@ -34,12 +33,21 @@ services:
   redis:
     image: redis:7-alpine
     container_name: taskraptor_redis
+    env_file:
+      - ./env.txt
+    command: >
+      sh -c ': "$${REDIS_PASSWORD:?REDIS_PASSWORD is required}" &&
+      redis-server --requirepass "$${REDIS_PASSWORD}"'
     restart: unless-stopped
     logging: *default-logging
     networks:
       - taskraptor_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          'redis-cli -a "$${REDIS_PASSWORD}" --no-auth-warning ping | grep PONG',
+        ]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -54,7 +62,7 @@ services:
     command: ./init.sh
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: "no"
 
   api:
@@ -67,7 +75,7 @@ services:
       init:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   worker:
@@ -81,7 +89,7 @@ services:
       init:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   beat:
@@ -95,7 +103,7 @@ services:
       init:
         condition: service_completed_successfully
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 networks:

@@ -8,7 +8,7 @@ from ninja import Schema
 class DebugUserOut(Schema):
     id: str
     email: str
-    timezone: str
+    timezone: str | None
     prompt_instructions_present: bool
     prompt_instructions_length: int
     date_joined: str | None

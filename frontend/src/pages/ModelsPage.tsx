@@ -49,12 +49,6 @@ const DEFAULT_CONTEXT_LIMIT = 25
 const INCLUDED_MODEL_DESCRIPTION =
   "50 requests per month, free. No API key needed. Good for trying things out and light daily use. Connect your own Anthropic or DeepSeek key for unlimited use."
 
-function providerLabel(provider: string): string {
-  if (provider === "system_free") return "System"
-  if (provider === "deepseek") return "DeepSeek"
-  return provider.charAt(0).toUpperCase() + provider.slice(1)
-}
-
 /** Produce a human-readable model name from the backend display_name. */
 function humanizeDisplayName(displayName: string, provider: string): string {
   // Remove trailing 8-digit date stamps like "20251001"

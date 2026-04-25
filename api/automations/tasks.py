@@ -15,7 +15,9 @@ from automations.services import run_automation_on_active_channels
 logger = logging.getLogger(__name__)
 
 
-def _get_user_timezone(timezone_name: str) -> ZoneInfo:
+def _get_user_timezone(timezone_name: str | None) -> ZoneInfo | None:
+    if not timezone_name:
+        return None
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
@@ -29,6 +31,13 @@ def _get_user_timezone(timezone_name: str) -> ZoneInfo:
 def automation_is_due(automation: Automation, now: datetime | None = None) -> bool:
     now = now or timezone.now()
     user_timezone = _get_user_timezone(automation.user.timezone)
+    if user_timezone is None:
+        logger.info(
+            "[automations] skipping automation=%s for user=%s without timezone",
+            automation.pk,
+            automation.user_id,
+        )
+        return False
     local_now = timezone.localtime(now, user_timezone)
 
     if local_now.time() < automation.schedule_time:

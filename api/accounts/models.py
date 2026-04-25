@@ -32,7 +32,9 @@ class User(AbstractUser):
 
     timezone = models.CharField(
         max_length=63,
-        default="America/New_York",
+        null=True,
+        blank=True,
+        default=None,
         help_text="IANA timezone name (e.g. America/New_York) for scheduling automations.",
     )
     prompt_instructions = models.TextField(

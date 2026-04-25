@@ -7,7 +7,7 @@ import pytest
 from django.test import Client
 from django.test import override_settings
 
-from channels.telegram import send_telegram_message
+from channels.telegram import send_telegram_message, set_telegram_webhook
 from channels.telegram_format import markdown_to_telegram_html
 from channels.tasks import process_telegram_join, process_telegram_text
 from channels.telegram_handlers import (
@@ -76,6 +76,42 @@ def test_send_telegram_message_uses_html_parse_mode(monkeypatch):
         "chat_id": "123",
         "text": "Done! <b>Buy oranges</b>",
         "parse_mode": "HTML",
+    }
+
+
+@override_settings(
+    TELEGRAM_BOT_TOKEN="test-token",
+    TELEGRAM_WEBHOOK_BASE_URL="https://taskraptor.example.com",
+    TELEGRAM_WEBHOOK_SECRET="webhook-secret",
+)
+def test_set_telegram_webhook_sends_secret_token(monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"ok": true, "result": true}'
+
+    def fake_urlopen(req, timeout):
+        requests.append((req, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr("channels.telegram.urllib.request.urlopen", fake_urlopen)
+
+    result = set_telegram_webhook()
+
+    assert result["ok"] is True
+    req, timeout = requests[0]
+    assert timeout == 30
+    payload = json.loads(req.data.decode("utf-8"))
+    assert payload == {
+        "url": "https://taskraptor.example.com/api/telegram/webhook",
+        "secret_token": "webhook-secret",
     }
 
 
@@ -192,6 +228,48 @@ def test_telegram_webhook_blank_text_returns_ok_and_enqueues_nothing(client, mon
     assert response.json() == {"ok": True}
     assert join_calls == []
     assert text_calls == []
+
+
+@override_settings(TELEGRAM_WEBHOOK_SECRET="webhook-secret")
+def test_telegram_webhook_rejects_invalid_secret_token(client, monkeypatch):
+    text_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.api.process_telegram_text.delay",
+        lambda chat_id, text: text_calls.append((chat_id, text)),
+    )
+
+    response = client.post(
+        WEBHOOK_URL,
+        data={"message": {"chat": {"id": 123}, "text": "hello"}},
+        content_type="application/json",
+        HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN="wrong",
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"ok": False}
+    assert text_calls == []
+
+
+@override_settings(TELEGRAM_WEBHOOK_SECRET="webhook-secret")
+def test_telegram_webhook_accepts_valid_secret_token(client, monkeypatch):
+    text_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.api.process_telegram_text.delay",
+        lambda chat_id, text: text_calls.append((chat_id, text)),
+    )
+
+    response = client.post(
+        WEBHOOK_URL,
+        data={"message": {"chat": {"id": 123}, "text": "hello"}},
+        content_type="application/json",
+        HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN="webhook-secret",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert text_calls == [("123", "hello")]
 
 
 def test_telegram_webhook_join_command_enqueues_join_task(client, monkeypatch):

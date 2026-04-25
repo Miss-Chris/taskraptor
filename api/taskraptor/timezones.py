@@ -17,9 +17,11 @@ def get_user_zone(timezone_name: str | None) -> ZoneInfo:
 
 
 def is_valid_timezone(timezone_name: str) -> bool:
+    if not timezone_name:
+        return False
     try:
         ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
+    except (ValueError, ZoneInfoNotFoundError):
         return False
     return True
 

@@ -3,9 +3,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -16,8 +17,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY . .
 
-RUN chmod +x init.sh
+RUN chmod +x init.sh && \
+    addgroup --system taskraptor && \
+    adduser --system --ingroup taskraptor taskraptor && \
+    chown -R taskraptor:taskraptor /app
 
 EXPOSE 8000
+
+USER taskraptor
 
 CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "taskraptor.wsgi:application"]

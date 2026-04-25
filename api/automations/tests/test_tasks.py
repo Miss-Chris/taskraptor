@@ -57,6 +57,8 @@ def test_dispatch_due_automations_enqueues_only_due_rows(monkeypatch, test_user)
 
 @pytest.mark.django_db
 def test_run_automation_executes_and_marks_last_run_at(monkeypatch, test_user):
+    test_user.timezone = "UTC"
+    test_user.save(update_fields=["timezone"])
     automation = Automation.objects.create(
         user=test_user,
         prompt="Run automation",
@@ -78,6 +80,28 @@ def test_run_automation_executes_and_marks_last_run_at(monkeypatch, test_user):
     web = Channel.objects.get(user=test_user, type=ChannelType.WEB)
     assert calls == [(web.pk, "Run automation")]
     assert automation.last_run_at == now
+
+
+@pytest.mark.django_db
+def test_run_automation_skips_when_user_timezone_is_missing(monkeypatch, test_user):
+    automation = Automation.objects.create(
+        user=test_user,
+        prompt="No timezone",
+        schedule_time=datetime.time(9, 0),
+    )
+    now = datetime.datetime(2026, 4, 5, 15, 0, tzinfo=datetime.UTC)
+    called = False
+
+    monkeypatch.setattr("automations.tasks.timezone.now", lambda: now)
+
+    def _unexpected_call(*args, **kwargs):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr("automations.services.handle_system_message", _unexpected_call)
+
+    assert run_automation(automation.pk) is False
+    assert called is False
 
 
 @pytest.mark.django_db

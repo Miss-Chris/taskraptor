@@ -23,7 +23,7 @@ class UserOut(Schema):
     email: str
     first_name: str
     last_name: str
-    timezone: str
+    timezone: str | None
     date_joined: datetime
 
 
@@ -32,7 +32,7 @@ class UserTimezoneIn(Schema):
 
 
 class UserSettingsOut(Schema):
-    timezone: str
+    timezone: str | None
     prompt_instructions: str
 
 

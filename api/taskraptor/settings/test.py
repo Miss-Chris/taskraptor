@@ -1,5 +1,7 @@
 from taskraptor.settings.local import *  # noqa: F401, F403
 
+SECRET_KEY = "test-secret-key"
+
 # In-memory SQLite: no extra services, fast, good default for local/CI. JSON features
 # differ from PostgreSQL (e.g. array containment); code paths that need PG can use
 # a dedicated settings module or override DATABASES via env/CI to point at a real DB.

@@ -6,8 +6,8 @@ This guide runs TaskRaptor with Docker Compose, Caddy, Redis, and an external Po
 
 - Caddy is the only public container and listens on port `80`.
 - Caddy proxies `/api/*` to the Django API container.
-- Caddy serves the built React app from `frontend/dist`.
-- Redis is private to the Docker network and backs Celery.
+- Caddy serves React assets built into its Docker image.
+- Redis is private to the Docker network, requires a password, and backs Celery.
 - Django migrations run in a one-shot `init` container before the API, worker, and beat start.
 - Celery worker processes chat, Telegram, and automation jobs.
 - Celery beat dispatches due automations every minute.
@@ -15,7 +15,6 @@ This guide runs TaskRaptor with Docker Compose, Caddy, Redis, and an external Po
 ## Prerequisites
 
 - Docker and Docker Compose.
-- Node.js and npm to build the frontend before deploy.
 - A PostgreSQL database reachable from the Docker host.
 
 For EC2, open inbound port `80` to the instance. If using RDS, allow the EC2 security group to connect to the RDS security group on port `5432`.
@@ -56,26 +55,20 @@ Depending on your Docker and Postgres configuration, `PGHOST` may be the host pr
 
 ## Setup
 
-Build the frontend assets:
-
-```bash
-cd frontend
-npm ci
-npm run build
-cd ..
-```
-
 Create the environment file:
 
 ```bash
 cp env.example env.txt
 python -c "import secrets; print(secrets.token_urlsafe(50))"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Paste the generated value into `SECRET_KEY`, then fill in the Postgres settings. At minimum, set:
+Paste one generated value into `SECRET_KEY` and the other into `REDIS_PASSWORD`,
+then fill in the Postgres settings. At minimum, set:
 
 ```dotenv
 SECRET_KEY=
+REDIS_PASSWORD=
 PGHOST=
 PGPORT=5432
 PGDATABASE=taskraptor
@@ -83,6 +76,11 @@ PGUSER=taskraptor
 PGPASSWORD=
 PGSSLMODE=require
 ```
+
+The backend dependencies are installed inside the API image with `uv sync --frozen --no-dev`.
+The frontend is built inside the Caddy image with `npm ci && npm run build`, so the
+EC2 host does not need Python packages, Node packages, or prebuilt `frontend/dist`
+files outside Docker.
 
 Start the stack:
 
@@ -104,18 +102,16 @@ docker compose run --rm init
 
 ## Upgrades
 
-Pull the new code, rebuild frontend assets, then rebuild and restart containers:
+Pull the new code, rebuild images, then restart containers:
 
 ```bash
 git pull
-cd frontend
-npm ci
-npm run build
-cd ..
 docker compose up -d --build
 ```
 
-The `init` container runs migrations before the app services start.
+The `init` container runs migrations before the app services start. Do not run
+`docker compose down` before building; if a new image build fails, the previous
+running containers keep serving the last successful version.
 
 ## HTTPS and Domains
 
@@ -124,7 +120,9 @@ The default `config/Caddyfile` serves HTTP on port `80`:
 ```caddyfile
 :80 {
     handle /api/* {
-        reverse_proxy api:8000
+        reverse_proxy api:8000 {
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle {
@@ -140,7 +138,9 @@ For a real domain with automatic HTTPS, point DNS at the server and replace `:80
 ```caddyfile
 taskraptor.example.com {
     handle /api/* {
-        reverse_proxy api:8000
+        reverse_proxy api:8000 {
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
     handle {
@@ -156,6 +156,12 @@ Then update `env.txt`:
 ```dotenv
 ALLOWED_HOSTS=taskraptor.example.com,api
 CSRF_TRUSTED_ORIGINS=https://taskraptor.example.com
+SECURE_SSL_REDIRECT=true
+SESSION_COOKIE_SECURE=true
+CSRF_COOKIE_SECURE=true
+SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS=true
+SECURE_HSTS_PRELOAD=false
 ```
 
 Expose ports `80` and `443` in `docker-compose.yml` if you enable HTTPS:
@@ -174,13 +180,58 @@ If you use Telegram, set these in `env.txt`:
 TELEGRAM_BOT_NAME=your_bot_name
 TELEGRAM_BOT_TOKEN=replace-me
 TELEGRAM_WEBHOOK_BASE_URL=https://taskraptor.example.com
+TELEGRAM_WEBHOOK_SECRET=replace-me
 ```
 
-After the stack is running, reset the webhook:
+Generate `TELEGRAM_WEBHOOK_SECRET` with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+TaskRaptor registers that value with Telegram as `secret_token` and rejects
+webhook requests whose `X-Telegram-Bot-Api-Secret-Token` header does not match.
+
+After the stack is running, reset the webhook from the API container:
 
 ```bash
 docker compose exec api uv run python manage.py reset_telegram_webhook
 ```
+
+The HTTP `/api/telegram/reset-webhook` route is staff-only and is intended for
+authenticated operator use, not public setup.
+
+## Registration and System Model Quota
+
+Public registration is enabled by default:
+
+```dotenv
+ALLOW_PUBLIC_REGISTRATION=true
+```
+
+For private instances, set it to `false` after creating the accounts you need.
+
+New users receive a `system_free` model backed by `DEEPSEEK_API_KEY`. Control the
+request quota assigned to newly created users with:
+
+```dotenv
+SYSTEM_FREE_MONTHLY_REQUEST_QUOTA=50
+```
+
+Set the quota to `0` if you want accounts to exist but not use the hosted
+system model. Users can still add their own supported provider keys from the app.
+
+## Redis
+
+Compose requires `REDIS_PASSWORD` and starts Redis with `--requirepass`. Django
+derives the default Celery broker/result URLs from that password:
+
+```text
+redis://:<REDIS_PASSWORD>@redis:6379/0
+```
+
+Only set `CELERY_BROKER_URL` or `CELERY_RESULT_BACKEND` if you are using an
+external Redis or another Celery backend.
 
 ## Backups
 
@@ -220,12 +271,10 @@ Check Caddy routing:
 curl http://localhost/api/openapi.json
 ```
 
-If the frontend returns a blank or missing page, rebuild it and confirm `frontend/dist/index.html` exists:
+If the frontend returns a blank or missing page, rebuild the Caddy image and
+inspect the built assets inside the container:
 
 ```bash
-cd frontend
-npm ci
-npm run build
-cd ..
-ls frontend/dist
+docker compose build caddy
+docker compose run --rm --entrypoint ls caddy /srv/frontend
 ```

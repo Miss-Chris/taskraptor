@@ -175,7 +175,12 @@ def set_telegram_webhook() -> dict:
         raise RuntimeError("TELEGRAM_WEBHOOK_BASE_URL is not configured.")
 
     webhook_url = f"{base}/api/telegram/webhook"
-    payload = json.dumps({"url": webhook_url}).encode("utf-8")
+    payload_data = {"url": webhook_url}
+    secret_token = (getattr(settings, "TELEGRAM_WEBHOOK_SECRET", "") or "").strip()
+    if secret_token:
+        payload_data["secret_token"] = secret_token
+
+    payload = json.dumps(payload_data).encode("utf-8")
     req = urllib.request.Request(
         _telegram_api_url("setWebhook"),
         data=payload,

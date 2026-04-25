@@ -5,10 +5,11 @@ export const SESSION_EXPIRED_ERROR = "SESSION_EXPIRED"
 export const NOT_FOUND_ERROR = "NOT_FOUND"
 
 export type MeResponse = {
-  id: number
+  id: string
   email: string
   first_name: string
   last_name: string
+  timezone: string | null
   date_joined: string
 }
 
@@ -81,6 +82,25 @@ export async function fetchMe(): Promise<MeResponse> {
   })
   if (!res.ok) {
     throw new Error("Not authenticated")
+  }
+  return res.json() as Promise<MeResponse>
+}
+
+export async function updateTimezone(timezone: string): Promise<MeResponse> {
+  const token = getToken()
+  if (!token) {
+    throw new Error("Not authenticated")
+  }
+  const res = await fetch("/api/auth/me/timezone", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ timezone }),
+  })
+  if (!res.ok) {
+    throw new Error(await parseErrorDetail(res))
   }
   return res.json() as Promise<MeResponse>
 }

@@ -3,7 +3,7 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
-from django.test import Client
+from django.test import Client, override_settings
 from django.utils import timezone
 
 from accounts.models import UserSession
@@ -42,6 +42,19 @@ def test_register_success(client):
     session = UserSession.objects.get(token=data["token"])
     assert session.expires_at is not None
     assert session.expires_at > timezone.now()
+
+
+@override_settings(ALLOW_PUBLIC_REGISTRATION=False)
+@pytest.mark.django_db
+def test_register_can_be_disabled(client):
+    response = client.post(
+        REGISTER_URL,
+        data={"email": "closed@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Public registration is disabled."}
 
 
 @pytest.mark.django_db
@@ -178,7 +191,7 @@ def test_me_authenticated(client):
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "eve@example.com"
-    assert data["timezone"] == "America/New_York"
+    assert data["timezone"] is None
     assert "id" in data
     assert "date_joined" in data
 
@@ -215,6 +228,26 @@ def test_update_timezone_rejects_invalid_timezone(client):
     response = client.patch(
         TIMEZONE_URL,
         data={"timezone": "Not/AZone"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid IANA timezone."
+
+
+@pytest.mark.django_db
+def test_update_timezone_rejects_blank_timezone(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "blank-tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        TIMEZONE_URL,
+        data={"timezone": "   "},
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
@@ -266,7 +299,7 @@ def test_get_settings_authenticated(client):
     response = client.get(SETTINGS_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
     assert response.status_code == 200
     data = response.json()
-    assert data["timezone"] == "America/New_York"
+    assert data["timezone"] is None
     assert data["prompt_instructions"] == ""
 
 
@@ -347,6 +380,26 @@ def test_update_settings_rejects_invalid_timezone(client):
     response = client.patch(
         SETTINGS_URL,
         data={"timezone": "Not/AZone"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid IANA timezone."
+
+
+@pytest.mark.django_db
+def test_update_settings_rejects_blank_timezone(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-blank-tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"timezone": ""},
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )

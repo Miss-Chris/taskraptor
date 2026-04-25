@@ -567,7 +567,7 @@ export function ChatPage() {
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain py-4">
+      <div className="scrollbar-subtle flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain py-4">
         {messages.length === 0 ? (
           !conversationId ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">

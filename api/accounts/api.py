@@ -28,8 +28,11 @@ def _default_session_expiry():
     return timezone.now() + timedelta(days=settings.USER_SESSION_TTL_DAYS)
 
 
-@router.post("/register", response={201: TokenOut, 400: ErrorOut})
+@router.post("/register", response={201: TokenOut, 400: ErrorOut, 403: ErrorOut})
 def register(request, payload: RegisterIn):
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        return Status(403, {"detail": "Public registration is disabled."})
+
     email = User.objects.normalize_email(payload.email)
     if User.objects.filter(email=email).exists():
         return Status(400, {"detail": "Email already registered."})

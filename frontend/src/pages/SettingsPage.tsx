@@ -9,34 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { useDocumentTitle } from "@/hooks/use-document-title"
 import { endSession } from "@/lib/auth"
+import { timezoneOptionsWithSelected } from "@/lib/timezones"
 import { useSettingsQuery, useUpdateSettingsMutation } from "@/queries/settings"
-
-const FALLBACK_TIMEZONES = [
-  "America/Los_Angeles",
-  "America/Denver",
-  "America/Chicago",
-  "America/New_York",
-  "UTC",
-  "Europe/London",
-  "Europe/Paris",
-  "Asia/Kolkata",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-]
-
-function getSupportedTimezones() {
-  const supportedValuesOf = (
-    Intl as typeof Intl & {
-      supportedValuesOf?: (input: "timeZone") => string[]
-    }
-  ).supportedValuesOf
-
-  if (typeof supportedValuesOf === "function") {
-    return supportedValuesOf("timeZone")
-  }
-
-  return FALLBACK_TIMEZONES
-}
 
 function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
@@ -78,32 +52,27 @@ export function SettingsPage() {
     }
   }, [navigate, queryClient, settingsQuery.error])
 
-  const timezone = timezoneDraft ?? settingsQuery.data?.timezone ?? ""
+  const savedTimezone = settingsQuery.data?.timezone ?? ""
+  const timezone = timezoneDraft ?? savedTimezone
   const savedPromptInstructions =
     settingsQuery.data?.prompt_instructions ?? ""
   const promptInstructions =
     promptInstructionsDraft ?? savedPromptInstructions
+  const timezoneChanged = timezone !== savedTimezone
   const promptChanged = promptInstructions !== savedPromptInstructions
 
   const timezoneOptions = useMemo(() => {
-    const options = getSupportedTimezones()
-    if (timezone && !options.includes(timezone)) {
-      return [timezone, ...options]
-    }
-    return options
+    return timezoneOptionsWithSelected(timezone || null)
   }, [timezone])
 
-  async function handleTimezoneChange(
-    event: React.ChangeEvent<HTMLSelectElement>
-  ) {
-    const nextTimezone = event.target.value
-    setTimezoneDraft(nextTimezone)
+  async function handleSaveTimezone(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setActionError(null)
     setStatusMessage(null)
 
     try {
       await updateMutation.mutateAsync({
-        body: { timezone: nextTimezone },
+        body: { timezone },
       })
       setTimezoneDraft(null)
       setStatusMessage("Timezone saved.")
@@ -155,7 +124,7 @@ export function SettingsPage() {
       ) : (
         <div className="grid gap-4">
           <section className="rounded-lg border border-border bg-card p-4">
-            <div className="max-w-2xl">
+            <form className="max-w-2xl" onSubmit={handleSaveTimezone}>
               <h2 className="text-section-title">Timezone</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 Used when TaskRaptor schedules automations and interprets dates.
@@ -165,7 +134,11 @@ export function SettingsPage() {
                 <select
                   id="timezone"
                   value={timezone}
-                  onChange={handleTimezoneChange}
+                  onChange={(event) => {
+                    setTimezoneDraft(event.target.value)
+                    setActionError(null)
+                    setStatusMessage(null)
+                  }}
                   className="h-9 w-full max-w-md rounded-3xl border border-input bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={updateMutation.isPending}
                 >
@@ -176,7 +149,17 @@ export function SettingsPage() {
                   ))}
                 </select>
               </div>
-            </div>
+              <div className="mt-4">
+                <Button
+                  type="submit"
+                  disabled={
+                    updateMutation.isPending || !timezone || !timezoneChanged
+                  }
+                >
+                  {updateMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            </form>
           </section>
 
           <section className="rounded-lg border border-border bg-card p-4">

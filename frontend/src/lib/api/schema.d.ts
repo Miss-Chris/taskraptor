@@ -538,7 +538,7 @@ export interface components {
             /** Last Name */
             last_name: string;
             /** Timezone */
-            timezone: string;
+            timezone: string | null;
             /**
              * Date Joined
              * Format: date-time
@@ -548,12 +548,12 @@ export interface components {
         /** UserTimezoneIn */
         UserTimezoneIn: {
             /** Timezone */
-            timezone: string;
+            timezone: string | null;
         };
         /** UserSettingsOut */
         UserSettingsOut: {
             /** Timezone */
-            timezone: string;
+            timezone: string | null;
             /** Prompt Instructions */
             prompt_instructions: string;
         };

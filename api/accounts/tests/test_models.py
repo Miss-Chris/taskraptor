@@ -6,6 +6,16 @@ User = get_user_model()
 
 
 @pytest.mark.django_db
+def test_user_timezone_defaults_to_none():
+    user = User.objects.create_user(
+        email="timezone_default@example.com",
+        password="testpass123",
+    )
+
+    assert user.timezone is None
+
+
+@pytest.mark.django_db
 def test_user_prompt_instructions_defaults_to_empty_string():
     user = User.objects.create_user(
         email="prompt_default@example.com",
