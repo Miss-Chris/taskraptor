@@ -334,7 +334,6 @@ export function TaskFormDialog({
             {/* Tags — chip-in-input pattern */}
             <div className="grid gap-1.5">
               <Label htmlFor="task-tag-input">Tags</Label>
-              {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events */}
               <div
                 className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-3xl border border-transparent bg-input/50 px-3 py-1.5 transition-[color,box-shadow,background-color] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 cursor-text"
                 onClick={() => tagInputRef.current?.focus()}
