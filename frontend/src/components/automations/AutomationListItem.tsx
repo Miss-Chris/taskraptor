@@ -4,14 +4,16 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Automation } from "@/lib/automations"
-import { IconPencil, IconTrash } from "@tabler/icons-react"
+import { IconPencil, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 
 interface AutomationListItemProps {
   automation: Automation
+  onTest: (automation: Automation) => void
   onEdit: (automation: Automation) => void
   onDelete: (automation: Automation) => void
   onToggleActive: (automation: Automation, isActive: boolean) => void
+  isTesting: boolean
   isUpdating: boolean
   isDeleting: boolean
 }
@@ -46,9 +48,11 @@ function formatLastRun(lastRunAt: string | null): string {
 
 export function AutomationListItem({
   automation,
+  onTest,
   onEdit,
   onDelete,
   onToggleActive,
+  isTesting,
   isUpdating,
   isDeleting,
 }: AutomationListItemProps) {
@@ -93,6 +97,17 @@ export function AutomationListItem({
         </p>
       </div>
       <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          aria-label="Test automation"
+          onClick={() => onTest(automation)}
+          disabled={isTesting}
+        >
+          <IconPlayerPlay />
+          {isTesting ? "Testing..." : "Test"}
+        </Button>
         <Switch
           checked={automation.is_active}
           onCheckedChange={handleToggle}

@@ -8,12 +8,18 @@ from django.utils import timezone
 
 from automations.models import Automation
 from automations.services import run_automation_on_active_channels
-from automations.tasks import dispatch_due_automations, run_automation
+from automations.tasks import (
+    dispatch_due_automations,
+    run_automation,
+    run_automation_immediately,
+)
 from channels.models import Channel, ChannelType, Conversation
 
 
 @pytest.mark.django_db
 def test_dispatch_due_automations_enqueues_only_due_rows(monkeypatch, test_user):
+    test_user.timezone = "UTC"
+    test_user.save(update_fields=["timezone"])
     now = datetime.datetime(2026, 4, 5, 15, 0, tzinfo=datetime.UTC)
     queued_ids: list[str] = []
 
@@ -197,3 +203,40 @@ def test_run_automation_fans_out_to_active_channels_and_creates_default_web(
     assert archived.pk not in {channel_id for channel_id, _ in calls}
     assert Conversation.objects.filter(channel=web).exists()
     assert Conversation.objects.filter(pk=dummy_conversation.pk).exists()
+
+
+@pytest.mark.django_db
+def test_run_automation_immediately_bypasses_due_and_active_checks(
+    monkeypatch,
+    test_user,
+):
+    now = datetime.datetime(2026, 4, 5, 15, 0, tzinfo=datetime.UTC)
+    automation = Automation.objects.create(
+        user=test_user,
+        prompt="Force run",
+        schedule_time=datetime.time(23, 59),
+        is_active=False,
+    )
+    calls: list[tuple[UUID, str]] = []
+
+    monkeypatch.setattr("automations.tasks.timezone.now", lambda: now)
+    monkeypatch.setattr(
+        "automations.services.handle_system_message",
+        lambda channel, prompt: calls.append((channel.pk, prompt)),
+    )
+
+    ran = run_automation_immediately(automation.pk)
+
+    automation.refresh_from_db()
+    web = Channel.objects.get(user=test_user, type=ChannelType.WEB)
+    assert ran is True
+    assert calls == [(web.pk, "Force run")]
+    assert automation.last_run_at == now
+
+
+@pytest.mark.django_db
+def test_run_automation_immediately_returns_false_for_missing_automation():
+    assert (
+        run_automation_immediately(UUID("00000000-0000-0000-0000-000000000000"))
+        is False
+    )

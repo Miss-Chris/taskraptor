@@ -7,7 +7,16 @@ from ninja import Router, Status
 
 from accounts.bearer import AuthBearer
 from accounts.models import User, UserSession
-from accounts.schemas import ErrorOut, LoginIn, RegisterIn, TokenOut, UserOut, UserTimezoneIn
+from accounts.schemas import (
+    ErrorOut,
+    LoginIn,
+    RegisterIn,
+    TokenOut,
+    UserOut,
+    UserSettingsOut,
+    UserSettingsPatchIn,
+    UserTimezoneIn,
+)
 from accounts.services import seed_default_user_data
 from agent.models import get_or_create_system_model
 from taskraptor.timezones import is_valid_timezone
@@ -70,4 +79,40 @@ def update_timezone(request, payload: UserTimezoneIn):
     user = request.auth
     user.timezone = timezone_name
     user.save(update_fields=["timezone"])
+    return Status(200, user)
+
+
+@router.get(
+    "/settings",
+    auth=AuthBearer(),
+    response={200: UserSettingsOut, 401: ErrorOut},
+)
+def get_settings(request):
+    user = request.auth
+    return Status(200, user)
+
+
+@router.patch(
+    "/settings",
+    auth=AuthBearer(),
+    response={200: UserSettingsOut, 400: ErrorOut, 401: ErrorOut},
+)
+def update_settings(request, payload: UserSettingsPatchIn):
+    user = request.auth
+    update_fields = []
+
+    if payload.timezone is not None:
+        timezone_name = payload.timezone.strip()
+        if not is_valid_timezone(timezone_name):
+            return Status(400, {"detail": "Invalid IANA timezone."})
+        user.timezone = timezone_name
+        update_fields.append("timezone")
+
+    if payload.prompt_instructions is not None:
+        user.prompt_instructions = payload.prompt_instructions
+        update_fields.append("prompt_instructions")
+
+    if update_fields:
+        user.save(update_fields=update_fields)
+
     return Status(200, user)

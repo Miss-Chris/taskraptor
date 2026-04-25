@@ -85,3 +85,19 @@ def run_automation(automation_id: str | UUID) -> bool:
         automation.save(update_fields=["last_run_at", "updated_at"])
 
     return True
+
+
+@shared_task(name="automations.run_automation_immediately")
+def run_automation_immediately(automation_id: str | UUID) -> bool:
+    automation = (
+        Automation.objects.select_related("user")
+        .filter(pk=automation_id)
+        .first()
+    )
+    if automation is None:
+        return False
+
+    run_automation_on_active_channels(automation)
+    automation.last_run_at = timezone.now()
+    automation.save(update_fields=["last_run_at", "updated_at"])
+    return True

@@ -19,6 +19,11 @@ class AutomationListOut(Schema):
     count: int
 
 
+class AutomationRunOut(Schema):
+    automation_id: UUID
+    queued: bool
+
+
 class AutomationCreateIn(Schema):
     prompt: str
     schedule_time: time

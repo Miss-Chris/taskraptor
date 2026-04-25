@@ -44,6 +44,7 @@ def test_automation_api_requires_authentication(client):
         == 401
     )
     assert client.get(f"/api/automations/{uuid4()}").status_code == 401
+    assert client.post(f"/api/automations/{uuid4()}/test").status_code == 401
 
 
 @pytest.mark.django_db
@@ -166,3 +167,39 @@ def test_update_and_delete_automation(client):
 
     missing_response = client.get(f"/api/automations/{automation_id}", **_auth(token))
     assert missing_response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_test_automation_queues_forced_run_and_is_user_scoped(client, monkeypatch):
+    token = _register_and_token(client, "automation-test@example.com")
+    other_token = _register_and_token(client, "automation-test-other@example.com")
+    user = User.objects.get(email="automation-test@example.com")
+    automation = Automation.objects.create(
+        user=user,
+        prompt="Try this now",
+        schedule_time=datetime.time(23, 59),
+        is_active=False,
+    )
+    queued_ids: list[str] = []
+
+    monkeypatch.setattr(
+        "automations.api.run_automation_immediately.delay",
+        queued_ids.append,
+    )
+
+    other_response = client.post(
+        f"/api/automations/{automation.pk}/test",
+        **_auth(other_token),
+    )
+    response = client.post(
+        f"/api/automations/{automation.pk}/test",
+        **_auth(token),
+    )
+
+    assert other_response.status_code == 404
+    assert response.status_code == 202
+    assert response.json() == {
+        "automation_id": str(automation.pk),
+        "queued": True,
+    }
+    assert queued_ids == [str(automation.pk)]

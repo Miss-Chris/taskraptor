@@ -27,7 +27,7 @@ def test_automation_defaults_and_str(test_user):
 
 @pytest.mark.django_db
 def test_user_timezone_default(test_user):
-    assert test_user.timezone == "UTC"
+    assert test_user.timezone == "America/New_York"
 
 
 @pytest.mark.django_db

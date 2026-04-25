@@ -20,6 +20,7 @@ REGISTER_URL = "/api/auth/register"
 LOGIN_URL = "/api/auth/login"
 ME_URL = "/api/auth/me"
 TIMEZONE_URL = "/api/auth/me/timezone"
+SETTINGS_URL = "/api/auth/settings"
 
 
 @pytest.fixture
@@ -177,7 +178,7 @@ def test_me_authenticated(client):
     assert response.status_code == 200
     data = response.json()
     assert data["email"] == "eve@example.com"
-    assert data["timezone"] == "UTC"
+    assert data["timezone"] == "America/New_York"
     assert "id" in data
     assert "date_joined" in data
 
@@ -250,4 +251,115 @@ def test_me_expired_token_rejected(client):
     )
 
     response = client.get(ME_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_get_settings_authenticated(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.get(SETTINGS_URL, HTTP_AUTHORIZATION=f"Bearer {token}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["timezone"] == "America/New_York"
+    assert data["prompt_instructions"] == ""
+
+
+@pytest.mark.django_db
+def test_update_settings_timezone_success(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"timezone": "Europe/London"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["timezone"] == "Europe/London"
+
+
+@pytest.mark.django_db
+def test_update_settings_prompt_instructions_success(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-prompt@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"prompt_instructions": "Always prioritize work tasks."},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["prompt_instructions"] == "Always prioritize work tasks."
+
+
+@pytest.mark.django_db
+def test_update_settings_multiple_fields(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-multi@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={
+            "timezone": "Asia/Tokyo",
+            "prompt_instructions": "Focus on urgent tasks first.",
+        },
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["timezone"] == "Asia/Tokyo"
+    assert data["prompt_instructions"] == "Focus on urgent tasks first."
+
+
+@pytest.mark.django_db
+def test_update_settings_rejects_invalid_timezone(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-bad-tz@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"timezone": "Not/AZone"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid IANA timezone."
+
+
+@pytest.mark.django_db
+def test_update_settings_unauthenticated(client):
+    response = client.patch(
+        SETTINGS_URL,
+        data={"timezone": "America/Los_Angeles"},
+        content_type="application/json",
+    )
     assert response.status_code == 401

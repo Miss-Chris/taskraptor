@@ -45,6 +45,15 @@ export function useUpdateAutomationMutation() {
   })
 }
 
+export function useTestAutomationMutation() {
+  const queryClient = useQueryClient()
+  return $api.useMutation("post", "/api/automations/{automation_id}/test", {
+    onSuccess() {
+      void queryClient.invalidateQueries({ queryKey: automationsQueryKey() })
+    },
+  })
+}
+
 export function useDeleteAutomationMutation() {
   const queryClient = useQueryClient()
   return $api.useMutation("delete", "/api/automations/{automation_id}", {

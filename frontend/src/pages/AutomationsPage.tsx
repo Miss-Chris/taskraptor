@@ -26,8 +26,9 @@ import type {
 import {
   useAutomationsQuery,
   useCreateAutomationMutation,
-  useUpdateAutomationMutation,
   useDeleteAutomationMutation,
+  useTestAutomationMutation,
+  useUpdateAutomationMutation,
 } from "@/queries/automations"
 import { IconPlus, IconRobot } from "@tabler/icons-react"
 
@@ -37,6 +38,7 @@ export function AutomationsPage() {
   const createMutation = useCreateAutomationMutation()
   const updateMutation = useUpdateAutomationMutation()
   const deleteMutation = useDeleteAutomationMutation()
+  const testMutation = useTestAutomationMutation()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingAutomation, setEditingAutomation] = useState<Automation | null>(
@@ -44,6 +46,10 @@ export function AutomationsPage() {
   )
   const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [testingAutomationId, setTestingAutomationId] = useState<string | null>(
+    null
+  )
+  const [testError, setTestError] = useState<string | null>(null)
 
   useDocumentTitle("Automations")
 
@@ -110,6 +116,22 @@ export function AutomationsPage() {
     })
   }
 
+  async function handleTestAutomation(automation: Automation) {
+    setTestingAutomationId(automation.id)
+    setTestError(null)
+    try {
+      await testMutation.mutateAsync({
+        params: { path: { automation_id: automation.id } },
+      })
+    } catch (err) {
+      setTestError(
+        err instanceof Error ? err.message : "Failed to test automation"
+      )
+    } finally {
+      setTestingAutomationId(null)
+    }
+  }
+
   return (
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
@@ -131,19 +153,28 @@ export function AutomationsPage() {
       ) : automationsQuery.isError ? (
         <p className="text-sm text-destructive">Could not load automations</p>
       ) : automations.length > 0 ? (
-        <div className="divide-y divide-border rounded-lg border border-border">
-          {automations.map((automation) => (
-            <AutomationListItem
-              key={automation.id}
-              automation={automation}
-              onEdit={handleEditAutomation}
-              onDelete={handleDeleteClick}
-              onToggleActive={handleToggleActive}
-              isUpdating={updateMutation.isPending}
-              isDeleting={deleteMutation.isPending}
-            />
-          ))}
-        </div>
+        <>
+          {testError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {testError}
+            </p>
+          ) : null}
+          <div className="divide-y divide-border rounded-lg border border-border">
+            {automations.map((automation) => (
+              <AutomationListItem
+                key={automation.id}
+                automation={automation}
+                onTest={handleTestAutomation}
+                onEdit={handleEditAutomation}
+                onDelete={handleDeleteClick}
+                onToggleActive={handleToggleActive}
+                isTesting={testingAutomationId === automation.id}
+                isUpdating={updateMutation.isPending}
+                isDeleting={deleteMutation.isPending}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted">

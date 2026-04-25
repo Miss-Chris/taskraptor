@@ -72,6 +72,24 @@ export interface paths {
         patch: operations["accounts_api_update_timezone"];
         trace?: never;
     };
+    "/api/auth/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Settings */
+        get: operations["accounts_api_get_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Settings */
+        patch: operations["accounts_api_update_settings"];
+        trace?: never;
+    };
     "/api/automations/": {
         parameters: {
             query?: never;
@@ -107,6 +125,23 @@ export interface paths {
         head?: never;
         /** Update Automation */
         patch: operations["automations_api_update_automation"];
+        trace?: never;
+    };
+    "/api/automations/{automation_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Automation */
+        post: operations["automations_api_test_automation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/chat/conversations": {
@@ -512,6 +547,20 @@ export interface components {
             /** Timezone */
             timezone: string;
         };
+        /** UserSettingsOut */
+        UserSettingsOut: {
+            /** Timezone */
+            timezone: string;
+            /** Prompt Instructions */
+            prompt_instructions: string;
+        };
+        /** UserSettingsPatchIn */
+        UserSettingsPatchIn: {
+            /** Timezone */
+            timezone?: string | null;
+            /** Prompt Instructions */
+            prompt_instructions?: string | null;
+        };
         /** AutomationListOut */
         AutomationListOut: {
             /** Automations */
@@ -566,6 +615,16 @@ export interface components {
             schedule_time?: string | null;
             /** Is Active */
             is_active?: boolean | null;
+        };
+        /** AutomationRunOut */
+        AutomationRunOut: {
+            /**
+             * Automation Id
+             * Format: uuid
+             */
+            automation_id: string;
+            /** Queued */
+            queued: boolean;
         };
         /** ChatConversationListOut */
         ChatConversationListOut: {
@@ -1402,6 +1461,77 @@ export interface operations {
             };
         };
     };
+    accounts_api_get_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSettingsOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    accounts_api_update_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserSettingsPatchIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserSettingsOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     automations_api_list_automations: {
         parameters: {
             query?: never;
@@ -1582,6 +1712,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    automations_api_test_automation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                automation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutomationRunOut"];
                 };
             };
             /** @description Unauthorized */

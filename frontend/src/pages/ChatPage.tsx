@@ -281,6 +281,12 @@ export function ChatPage() {
   const activeRun = isActiveRun(latestRun) ? latestRun : null
   const canSend = input.trim().length > 0 && !sending && !starting
 
+  const focusComposer = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+    })
+  }, [])
+
   useDocumentTitle(
     loading
       ? "Loading chat"
@@ -409,12 +415,13 @@ export function ChatPage() {
 
     setError(null)
     setRunError(null)
+    setInput("")
+    focusComposer()
     try {
       if (!conversationId) {
         const result = await startChat.mutateAsync({
           body: { content },
         })
-        setInput("")
         setConversation(result.conversation)
         setMessages([result.message])
         setRuns([result.run])
@@ -427,14 +434,15 @@ export function ChatPage() {
         params: { path: { conversation_id: conversationId } },
         body: { content },
       })
-      setInput("")
       setMessages((current) => mergeMessages(current, [result.message]))
       setRuns((current) => mergeRun(current, result.run))
       window.dispatchEvent(new Event("taskraptor:chat-updated"))
-      textareaRef.current?.focus()
+      focusComposer()
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to send message"
       if (!handleAuthError(message)) setError(message)
+      setInput((current) => (current.length > 0 ? current : content))
+      focusComposer()
     }
   }
 
@@ -546,7 +554,6 @@ export function ChatPage() {
             rows={2}
             placeholder="Message TaskRaptor"
             className="min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={sending || starting}
           />
           <Button
             type="submit"

@@ -13,8 +13,10 @@ from automations.schemas import (
     AutomationCreateIn,
     AutomationListOut,
     AutomationOut,
+    AutomationRunOut,
     AutomationUpdateIn,
 )
+from automations.tasks import run_automation_immediately
 
 router = Router(tags=["automations"], auth=AuthBearer())
 
@@ -81,6 +83,26 @@ def get_automation(request: AuthedHttpRequest, automation_id: UUID):
     except ObjectDoesNotExist:
         return Status(404, {"detail": "Not found."})
     return Status(200, _to_automation_out(automation))
+
+
+@router.post(
+    "/{automation_id}/test",
+    response={202: AutomationRunOut, 401: ErrorOut, 404: ErrorOut},
+)
+def test_automation(request: AuthedHttpRequest, automation_id: UUID):
+    try:
+        automation = _automation_queryset(request.auth).get(pk=automation_id)
+    except ObjectDoesNotExist:
+        return Status(404, {"detail": "Not found."})
+
+    run_automation_immediately.delay(str(automation.pk))
+    return Status(
+        202,
+        AutomationRunOut(
+            automation_id=automation.pk,
+            queued=True,
+        ),
+    )
 
 
 @router.patch(

@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.utils import timezone
 
 UTC_ZONE = ZoneInfo("UTC")
-DEFAULT_TIMEZONE = "UTC"
+DEFAULT_TIMEZONE = "America/New_York"
 
 
 def get_user_zone(timezone_name: str | None) -> ZoneInfo:
