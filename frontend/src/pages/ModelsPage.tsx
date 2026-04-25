@@ -30,6 +30,7 @@ import { endSession } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import {
   formatTokenCount,
+  formatUsageDate,
   type SupportedModelOption,
   type UsageLlmModel,
   type UsageModelCreateInput,
@@ -45,57 +46,40 @@ import {
 
 const DEFAULT_CONTEXT_LIMIT = 25
 
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "No reset date"
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return "No reset date"
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  })
-}
+const INCLUDED_MODEL_DESCRIPTION =
+  "50 requests per month, free. No API key needed. Good for trying things out and light daily use. Connect your own Anthropic or DeepSeek key for unlimited use."
 
 function providerLabel(provider: string): string {
   if (provider === "system_free") return "System"
+  if (provider === "deepseek") return "DeepSeek"
   return provider.charAt(0).toUpperCase() + provider.slice(1)
+}
+
+/** Produce a human-readable model name from the backend display_name. */
+function humanizeDisplayName(displayName: string, provider: string): string {
+  // Remove trailing 8-digit date stamps like "20251001"
+  let name = displayName.replace(/\s+\d{8}$/, "").trim()
+  // Collapse adjacent digit tokens: "4 5" → "4.5"
+  name = name.replace(/\b(\d+)\s+(\d+)\b/g, "$1.$2")
+  // Strip leading provider prefix (case-insensitive) before title-casing
+  const providerNorm = provider === "system_free" ? "system" : provider
+  name = name.replace(new RegExp(`^${providerNorm}\\s+`, "i"), "")
+  // Title-case
+  name = name.replace(/\b\w/g, (c) => c.toUpperCase())
+  return name
+}
+
+function sourceLabel(model: UsageLlmModel): string {
+  return model.is_system ? "Included" : "Your API key"
+}
+
+function resetDateText(model: UsageLlmModel): string {
+  if (!model.quota_expires_at) return "No reset date set."
+  return `Resets ${formatUsageDate(model.quota_expires_at)}.`
 }
 
 function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
-}
-
-function ModelSkeleton() {
-  return (
-    <div className="space-y-3">
-      {[0, 1, 2].map((index) => (
-        <div key={index} className="rounded-lg border border-border p-4">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-3 h-4 w-full max-w-lg" />
-          <Skeleton className="mt-4 h-8 w-56" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function TokenSummary({
-  label,
-  value,
-  detail,
-}: {
-  label: string
-  value: string
-  detail?: string
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-background p-4">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
-      {detail ? (
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-      ) : null}
-    </div>
-  )
 }
 
 function StatusPill({
@@ -200,7 +184,7 @@ function ModelDialog({
       setError(
         getErrorMessage(
           err,
-          isEdit ? "Failed to update model" : "Failed to create model"
+          isEdit ? "Failed to update model" : "Failed to add provider key"
         )
       )
     }
@@ -211,11 +195,13 @@ function ModelDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="contents">
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
+            <DialogTitle>
+              {isEdit ? "Edit provider key" : "Add provider key"}
+            </DialogTitle>
             <DialogDescription>
               {isEdit
                 ? "Update the API key or context limit for this model."
-                : "Add a user-provided model key."}
+                : "Connect your own Anthropic or DeepSeek API key."}
             </DialogDescription>
           </DialogHeader>
 
@@ -225,7 +211,10 @@ function ModelDialog({
               {isEdit ? (
                 <Input
                   id="model-key"
-                  value={state.model.display_name}
+                  value={humanizeDisplayName(
+                    state.model.display_name,
+                    state.model.provider
+                  )}
                   disabled
                 />
               ) : (
@@ -238,7 +227,7 @@ function ModelDialog({
                 >
                   {supportedModels.map((option) => (
                     <option key={option.model_key} value={option.model_key}>
-                      {option.display_name}
+                      {humanizeDisplayName(option.display_name, option.provider)}
                     </option>
                   ))}
                 </select>
@@ -317,7 +306,68 @@ function ModelDialog({
   )
 }
 
-function ModelRow({
+function CurrentlyUsingCard({ model }: { model: UsageLlmModel }) {
+  const name = humanizeDisplayName(model.display_name, model.provider)
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Currently using
+      </p>
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+          {model.is_system ? (
+            <IconCpu className="size-5 text-muted-foreground" />
+          ) : (
+            <IconKey className="size-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-section-title">{name}</h2>
+            <StatusPill tone="success">Active</StatusPill>
+            {!model.is_available && (
+              <StatusPill tone="danger">Unavailable</StatusPill>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {sourceLabel(model)}&nbsp;·&nbsp;
+            <span className="font-mono">{model.model_key}</span>
+          </p>
+
+          {model.is_system ? (
+            <div className="mt-4">
+              <UsageMeter
+                quota={model.quota}
+                quotaUsed={model.quota_used}
+                quotaRemaining={model.quota_remaining}
+                isAvailable={model.is_available}
+                unitSingular="request"
+                unitPlural="requests"
+                usedFormat
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {resetDateText(model)}
+              </p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                {INCLUDED_MODEL_DESCRIPTION}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Tokens used:{" "}
+              <span className="font-medium text-foreground">
+                {formatTokenCount(model.quota_used)}
+              </span>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ModelListItem({
   model,
   onActivate,
   onEdit,
@@ -330,72 +380,85 @@ function ModelRow({
   onDelete: (model: UsageLlmModel) => void
   isMutating: boolean
 }) {
-  const canActivate = !model.is_active
-  const canEdit = !model.is_system
+  const name = humanizeDisplayName(model.display_name, model.provider)
   const canDelete = !model.is_system && !model.is_active
 
   return (
-    <div className="grid gap-4 p-4 md:grid-cols-[1fr_auto] md:items-start">
-      <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
-            {model.is_system ? (
-              <IconCpu className="size-4 text-muted-foreground" />
-            ) : (
-              <IconKey className="size-4 text-muted-foreground" />
-            )}
-          </div>
+    <div className="flex items-start gap-3 p-4">
+      {/* Radio indicator */}
+      <div
+        className={cn(
+          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+          model.is_active
+            ? "border-primary"
+            : "border-muted-foreground/40"
+        )}
+      >
+        {model.is_active && (
+          <div className="size-2 rounded-full bg-primary" />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-section-title">
-              {model.display_name}
-            </h2>
-            <p className="truncate font-mono text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">{name}</span>
+              <StatusPill tone="neutral">{sourceLabel(model)}</StatusPill>
+              {model.is_active && !model.is_available && (
+                <StatusPill tone="danger">Unavailable</StatusPill>
+              )}
+            </div>
+            <p className="mt-0.5 font-mono text-xs text-muted-foreground">
               {model.model_key}
             </p>
           </div>
-          {model.is_active ? (
-            <StatusPill tone="success">Active</StatusPill>
-          ) : null}
-          {model.is_active && !model.is_available ? (
-            <StatusPill tone="danger">Unavailable</StatusPill>
-          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            {!model.is_active && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onActivate(model)}
+                disabled={isMutating}
+              >
+                <IconCheck />
+                Activate
+              </Button>
+            )}
+            {!model.is_system && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(model)}
+                disabled={isMutating}
+              >
+                <IconSettings />
+                Edit
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => onDelete(model)}
+              disabled={model.is_system || !canDelete || isMutating}
+              title={
+                model.is_active && !model.is_system
+                  ? "Activate another model before removing this one."
+                  : undefined
+              }
+            >
+              <IconTrash />
+              Remove
+            </Button>
+          </div>
         </div>
 
-        <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt className="text-muted-foreground">Provider</dt>
-            <dd className="mt-1 font-medium">
-              {providerLabel(model.provider)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">
-              {model.is_system ? "Cost" : "API key"}
-            </dt>
-            <dd className="mt-1 font-medium">
-              {model.is_system
-                ? "Free of charge"
-                : model.has_api_key
-                  ? "Saved"
-                  : "Missing"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Usage tracking</dt>
-            <dd className="mt-1 font-medium">
-              {model.is_system ? "Requests" : "Tokens"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Context limit</dt>
-            <dd className="mt-1 font-medium">
-              {model.context_message_limit} messages
-            </dd>
-          </div>
-        </dl>
-
-        {model.is_system ? (
-          <div className="mt-4 max-w-xl">
+        <div className="mt-2.5">
+          {model.is_system ? (
             <UsageMeter
               quota={model.quota}
               quotaUsed={model.quota_used}
@@ -403,70 +466,54 @@ function ModelRow({
               isAvailable={model.is_active ? model.is_available : true}
               unitSingular="request"
               unitPlural="requests"
+              usedFormat
+              compact
             />
-            <p className="mt-2 text-xs text-muted-foreground">
-              {model.quota_expires_at
-                ? `Resets or expires ${formatDateTime(model.quota_expires_at)}.`
-                : "No reset date is set."}
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Tokens used:{" "}
+              <span className="font-medium text-foreground">
+                {formatTokenCount(model.quota_used)}
+              </span>
             </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CurrentlyUsingCardSkeleton() {
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <Skeleton className="mb-3 h-3 w-24" />
+      <div className="flex items-start gap-3">
+        <Skeleton className="size-10 rounded-lg" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-3 w-64" />
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-3 w-full max-w-xs" />
+            <Skeleton className="h-2 w-full max-w-xs" />
           </div>
-        ) : (
-          <p className="mt-4 text-xs text-muted-foreground">
-            Token totals are tracked for provider-key models and shown in the
-            BYO key summary.
-          </p>
-        )}
-
-        {model.is_active && !model.is_system ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            Activate another model before deleting this one.
-          </p>
-        ) : null}
+        </div>
       </div>
+    </div>
+  )
+}
 
-      <div className="flex flex-wrap gap-2 md:justify-end">
-        {canActivate ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onActivate(model)}
-            disabled={isMutating}
-          >
-            <IconCheck />
-            Activate
-          </Button>
-        ) : null}
-        {canEdit ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(model)}
-            disabled={isMutating}
-          >
-            <IconSettings />
-            Edit
-          </Button>
-        ) : null}
-        {!model.is_system ? (
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={() => onDelete(model)}
-            disabled={!canDelete || isMutating}
-            title={
-              !canDelete
-                ? "Activate another model before deleting this one."
-                : undefined
-            }
-          >
-            <IconTrash />
-            Delete
-          </Button>
-        ) : null}
-      </div>
+function ModelListSkeleton() {
+  return (
+    <div className="divide-y divide-border rounded-lg border border-border">
+      {[0, 1].map((index) => (
+        <div key={index} className="flex items-start gap-3 p-4">
+          <Skeleton className="mt-0.5 size-4 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-56" />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -503,14 +550,6 @@ export function ModelsPage() {
   const models = useMemo(() => summary?.models ?? [], [summary?.models])
   const activeModel = useMemo(
     () => models.find((model) => model.is_active) ?? null,
-    [models]
-  )
-  const systemModel = useMemo(
-    () => models.find((model) => model.is_system) ?? null,
-    [models]
-  )
-  const byoModels = useMemo(
-    () => models.filter((model) => !model.is_system),
     [models]
   )
   const isMutating =
@@ -569,118 +608,32 @@ export function ModelsPage() {
       })
       setDeleteTarget(null)
     } catch (err) {
-      setDeleteError(getErrorMessage(err, "Failed to delete model"))
+      setDeleteError(getErrorMessage(err, "Failed to remove model"))
     }
   }
 
   return (
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
-      <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
-        <div>
-          <h1 className="text-page-title">Models</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {usageQuery.isLoading
-              ? "Loading model settings..."
-              : activeModel
-                ? `${activeModel.display_name} is active as ${activeModel.is_system ? "the free system model" : "a user-provided key"}.`
-                : "No active model found."}
-          </p>
-        </div>
-        <Button
-          type="button"
-          onClick={handleNewModel}
-          disabled={usageQuery.isLoading}
-        >
-          <IconPlus />
-          Add model
-        </Button>
+      <header className="border-b border-border pb-4">
+        <h1 className="text-page-title">Models</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {usageQuery.isLoading
+            ? "Loading model settings..."
+            : activeModel
+              ? `Using ${humanizeDisplayName(activeModel.display_name, activeModel.provider)}.`
+              : "No active model found."}
+        </p>
       </header>
 
       {usageQuery.isError ? (
         <p className="text-sm text-destructive">Could not load model usage.</p>
       ) : (
         <>
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-2">
-                <IconCpu className="size-4 text-muted-foreground" />
-                <h2 className="text-section-title">System model</h2>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Provided free of charge for evaluation and regular use.
-                Availability is shown as requests, not tokens.
-              </p>
-              {usageQuery.isLoading ? (
-                <div className="mt-4 space-y-3">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-2 w-full" />
-                  <Skeleton className="h-4 w-56" />
-                </div>
-              ) : systemModel ? (
-                <div className="mt-4">
-                  <UsageMeter
-                    quota={systemModel.quota}
-                    quotaUsed={systemModel.quota_used}
-                    quotaRemaining={systemModel.quota_remaining}
-                    isAvailable={
-                      systemModel.is_active ? systemModel.is_available : true
-                    }
-                    unitSingular="request"
-                    unitPlural="requests"
-                  />
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {systemModel.quota_expires_at
-                      ? `Resets or expires ${formatDateTime(systemModel.quota_expires_at)}.`
-                      : "No reset date is set."}
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  The system model has not been created for this account.
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-2">
-                <IconKey className="size-4 text-muted-foreground" />
-                <h2 className="text-section-title">Bring your own key</h2>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Connect DeepSeek or Anthropic for additional model
-                functionality. Token totals are shown only for chats handled by
-                your saved provider keys.
-              </p>
-
-              {usageQuery.isLoading ? (
-                <div className="mt-4 space-y-3">
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : byoModels.length > 0 ? (
-                <div className="mt-4">
-                  <TokenSummary
-                    label="Provider-key tokens"
-                    value={formatTokenCount(summary?.totals.total_tokens)}
-                    detail={`${formatTokenCount(summary?.totals.input_tokens)} input / ${formatTokenCount(summary?.totals.output_tokens)} output${
-                      summary?.totals.recent_since
-                        ? ` since ${formatDateTime(summary.totals.recent_since)}`
-                        : ""
-                    }`}
-                  />
-                </div>
-              ) : (
-                <div className="mt-4 rounded-lg border border-dashed border-border p-4">
-                  <p className="text-sm font-medium">
-                    No provider key connected
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Add a key when you want provider-specific models and token
-                    visibility.
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
+          {usageQuery.isLoading ? (
+            <CurrentlyUsingCardSkeleton />
+          ) : activeModel ? (
+            <CurrentlyUsingCard model={activeModel} />
+          ) : null}
 
           {actionError ? (
             <p className="text-sm text-destructive" role="alert">
@@ -688,38 +641,52 @@ export function ModelsPage() {
             </p>
           ) : null}
 
-          {usageQuery.isLoading ? (
-            <ModelSkeleton />
-          ) : models.length > 0 ? (
-            <div className="divide-y divide-border rounded-lg border border-border">
-              {models.map((model) => (
-                <ModelRow
-                  key={model.id}
-                  model={model}
-                  onActivate={handleActivateModel}
-                  onEdit={handleEditModel}
-                  onDelete={handleDeleteClick}
-                  isMutating={isMutating}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                <IconCpu className="size-6 text-muted-foreground" />
+          <section>
+            <h2 className="mb-3 text-section-title">Available models</h2>
+            {usageQuery.isLoading ? (
+              <ModelListSkeleton />
+            ) : models.length > 0 ? (
+              <div className="divide-y divide-border rounded-lg border border-border">
+                {models.map((model) => (
+                  <ModelListItem
+                    key={model.id}
+                    model={model}
+                    onActivate={handleActivateModel}
+                    onEdit={handleEditModel}
+                    onDelete={handleDeleteClick}
+                    isMutating={isMutating}
+                  />
+                ))}
+                <div className="p-4">
+                  <button
+                    type="button"
+                    onClick={handleNewModel}
+                    disabled={usageQuery.isLoading}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <IconPlus className="size-4" />
+                    Add a provider key
+                  </button>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium">No models available</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Add a model to start using TaskRaptor.
-                </p>
+            ) : (
+              <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 rounded-lg border border-border text-center">
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <IconCpu className="size-6 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">No models available</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Add a provider key to start using TaskRaptor.
+                  </p>
+                </div>
+                <Button type="button" onClick={handleNewModel}>
+                  <IconPlus />
+                  Add a provider key
+                </Button>
               </div>
-              <Button type="button" onClick={handleNewModel}>
-                <IconPlus />
-                Add model
-              </Button>
-            </div>
-          )}
+            )}
+          </section>
         </>
       )}
 
@@ -744,12 +711,19 @@ export function ModelsPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete model?</DialogTitle>
+            <DialogTitle>Remove model?</DialogTitle>
             <DialogDescription>
               This removes the saved API key and model settings.
               {deleteTarget ? (
                 <span className="mt-2 block font-medium text-foreground">
-                  {deleteTarget.display_name} · {deleteTarget.model_key}
+                  {humanizeDisplayName(
+                    deleteTarget.display_name,
+                    deleteTarget.provider
+                  )}{" "}
+                  ·{" "}
+                  <span className="font-mono text-xs">
+                    {deleteTarget.model_key}
+                  </span>
                 </span>
               ) : null}
             </DialogDescription>
@@ -775,7 +749,7 @@ export function ModelsPage() {
               onClick={handleConfirmDelete}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Removing..." : "Remove"}
             </Button>
           </DialogFooter>
         </DialogContent>
