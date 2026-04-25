@@ -1,6 +1,29 @@
-from ninja import NinjaAPI
+from django.db import DEFAULT_DB_ALIAS, connections
+from django.db.utils import DatabaseError
+from ninja import NinjaAPI, Schema, Status
 
 api = NinjaAPI(title="TaskRaptor API", version="1.0.0")
+
+
+class HealthOut(Schema):
+    status: str
+    database: str
+
+
+def _database_is_healthy() -> bool:
+    try:
+        with connections[DEFAULT_DB_ALIAS].cursor() as cursor:
+            cursor.execute("SELECT 1")
+            return cursor.fetchone() == (1,)
+    except DatabaseError:
+        return False
+
+
+@api.get("/health", response={200: HealthOut, 503: HealthOut}, tags=["health"])
+def health(request):
+    if _database_is_healthy():
+        return Status(200, {"status": "ok", "database": "ok"})
+    return Status(503, {"status": "error", "database": "unavailable"})
 
 
 def register_routers():
