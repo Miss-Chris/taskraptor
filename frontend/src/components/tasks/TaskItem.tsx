@@ -4,6 +4,27 @@ import { formatTaskDue, type Task } from "@/lib/tasks"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { cn } from "@/lib/utils"
 
+const STATUS_LABEL: Record<Task["status"], string> = {
+  pending: "Pending",
+  in_progress: "In progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+}
+
+const STATUS_DOT_CLASS: Record<Task["status"], string> = {
+  pending: "bg-amber-400",
+  in_progress: "bg-sky-400",
+  completed: "bg-emerald-400",
+  cancelled: "bg-muted-foreground/50",
+}
+
+const STATUS_BORDER_CLASS: Record<Task["status"], string> = {
+  pending: "border-l-amber-400",
+  in_progress: "border-l-sky-400",
+  completed: "border-l-emerald-400",
+  cancelled: "border-l-muted-foreground/50",
+}
+
 function TaskItemContent({ task }: { task: Task }) {
   return (
     <>
@@ -13,13 +34,24 @@ function TaskItemContent({ task }: { task: Task }) {
             {task.name}
           </span>
         </div>
-        {task.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {task.tags.map((t) => (
-              <TaskTag key={t} label={t} />
-            ))}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border border-border/60 px-1.5 py-0.5 text-xs text-muted-foreground",
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                STATUS_DOT_CLASS[task.status],
+              )}
+            />
+            {STATUS_LABEL[task.status]}
+          </span>
+          {task.tags.map((t) => (
+            <TaskTag key={t} label={t} />
+          ))}
+        </div>
       </div>
       <div className="flex shrink-0 flex-col gap-1 text-right md:text-left">
         <span className="text-xs text-muted-foreground">
@@ -35,13 +67,6 @@ function TaskItemContent({ task }: { task: Task }) {
       </div>
     </>
   )
-}
-
-const STATUS_BORDER_CLASS: Record<Task["status"], string> = {
-  pending: "border-l-amber-400",
-  in_progress: "border-l-sky-400",
-  completed: "border-l-emerald-400",
-  cancelled: "border-l-muted-foreground/50",
 }
 
 export function TaskItem({

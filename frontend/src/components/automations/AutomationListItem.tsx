@@ -3,8 +3,16 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Automation } from "@/lib/automations"
-import { IconPencil, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
+import { IconDots, IconPencil, IconPlayerPlay, IconTrash } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 
 interface AutomationListItemProps {
@@ -16,18 +24,38 @@ interface AutomationListItemProps {
   isTesting: boolean
   isUpdating: boolean
   isDeleting: boolean
+  testResult?: { queued: boolean } | { error: string } | null
 }
 
-function formatTime(timeString: string): string {
+function formatUtcTime(timeString: string): string {
   const [hours = "00", minutes = "00"] = timeString.split(":")
   const hour = Number.parseInt(hours, 10)
   const ampm = hour >= 12 ? "PM" : "AM"
   const displayHour = hour % 12 || 12
-  return `${displayHour}:${minutes} ${ampm}`
+  return `${displayHour}:${minutes} ${ampm} UTC`
+}
+
+function utcTimeToLocal(timeString: string): string {
+  const [hours = "00", minutes = "00"] = timeString.split(":")
+  const now = new Date()
+  const utcDate = new Date(
+    Date.UTC(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      Number.parseInt(hours, 10),
+      Number.parseInt(minutes, 10)
+    )
+  )
+  return utcDate.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  })
 }
 
 function formatLastRun(lastRunAt: string | null): string {
-  if (!lastRunAt) return "Never run"
+  if (!lastRunAt) return "Never"
   const date = new Date(lastRunAt)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
@@ -55,6 +83,7 @@ export function AutomationListItem({
   isTesting,
   isUpdating,
   isDeleting,
+  testResult,
 }: AutomationListItemProps) {
   const [isTogglePending, setIsTogglePending] = useState(false)
 
@@ -66,6 +95,10 @@ export function AutomationListItem({
       setIsTogglePending(false)
     }
   }
+
+  const utcTime = formatUtcTime(automation.schedule_time)
+  const localTime = utcTimeToLocal(automation.schedule_time)
+  const showLocalTime = localTime !== utcTime
 
   return (
     <div
@@ -85,16 +118,41 @@ export function AutomationListItem({
           <span className="text-sm font-medium">
             {automation.is_active ? "Active" : "Inactive"}
           </span>
-          <span className="text-muted-foreground text-xs">
-            · Runs at {formatTime(automation.schedule_time)}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-muted-foreground cursor-default text-xs underline decoration-dotted underline-offset-2">
+                  · Runs at {utcTime}
+                </span>
+              </TooltipTrigger>
+              {showLocalTime && (
+                <TooltipContent>
+                  {localTime} in your timezone
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
           {automation.prompt}
         </p>
-        <p className="text-muted-foreground mt-1 text-xs">
-          Last run: {formatLastRun(automation.last_run_at)}
-        </p>
+        <div className="mt-1 flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            Last run: {formatLastRun(automation.last_run_at)}
+          </p>
+          {testResult != null && (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium",
+                "error" in testResult
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              )}
+            >
+              {"error" in testResult ? testResult.error : "Test queued"}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-1">
         <Button
@@ -114,29 +172,33 @@ export function AutomationListItem({
           disabled={isUpdating || isTogglePending}
           aria-label={automation.is_active ? "Deactivate automation" : "Activate automation"}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Edit automation"
-          onClick={() => onEdit(automation)}
-          disabled={isUpdating || isDeleting}
-        >
-          <IconPencil />
-          <span className="sr-only">Edit</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Delete automation"
-          onClick={() => onDelete(automation)}
-          disabled={isDeleting}
-          className="text-destructive hover:text-destructive"
-        >
-          <IconTrash />
-          <span className="sr-only">Delete</span>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="More options"
+              disabled={isUpdating || isDeleting}
+            >
+              <IconDots />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(automation)}>
+              <IconPencil className="size-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(automation)}
+              className="text-destructive focus:text-destructive"
+            >
+              <IconTrash className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
@@ -161,8 +223,8 @@ export function AutomationListSkeleton({ count = 3 }: AutomationListSkeletonProp
             <Skeleton className="h-3 w-24" />
           </div>
           <div className="flex items-center gap-1">
+            <Skeleton className="h-8 w-16" />
             <Skeleton className="h-6 w-11 rounded-full" />
-            <Skeleton className="size-8" />
             <Skeleton className="size-8" />
           </div>
         </div>

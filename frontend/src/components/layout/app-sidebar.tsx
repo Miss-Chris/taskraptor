@@ -128,7 +128,7 @@ export function AppSidebar() {
   const upcomingActive = pathname === "/tasks/upcoming"
   const conversationsActive = pathname === "/conversations"
   const activeConversationId = getActiveConversationId(pathname)
-  const tagCounts = facets?.tag_counts ?? []
+  const tagCounts = (facets?.tag_counts ?? []).filter((row) => row.count > 0)
   const visibleTagCounts = tagCounts.slice(0, tagsExpanded ? 10 : 5)
   const canToggleTags = tagCounts.length > 5
   const activeSystemModel = usageQuery.data?.models.find((model) => model.is_active && model.is_system) ?? null

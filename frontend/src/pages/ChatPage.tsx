@@ -27,6 +27,14 @@ import {
 
 const POLL_MS = 1500
 const INLINE_MARKDOWN_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
+const GROUP_GAP_MS = 5 * 60 * 1000
+
+const EXAMPLE_PROMPTS = [
+  "What tasks do I have due today?",
+  "Add a task: review project proposal by Friday",
+  "What's on my schedule this week?",
+  "Show me tasks I haven't started yet",
+]
 
 function isActiveRun(run: ChatRun | null | undefined): run is ChatRun {
   return run?.status === "pending" || run?.status === "running"
@@ -58,6 +66,21 @@ function formatTime(value: string): string {
   return date.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
+  })
+}
+
+function groupMessages(
+  messages: ChatMessage[]
+): Array<{ message: ChatMessage; isGroupStart: boolean }> {
+  return messages.map((message, index) => {
+    const prev = messages[index - 1]
+    const isGroupStart =
+      !prev ||
+      prev.role !== message.role ||
+      new Date(message.created_at).getTime() -
+        new Date(prev.created_at).getTime() >
+        GROUP_GAP_MS
+    return { message, isGroupStart }
   })
 }
 
@@ -132,7 +155,7 @@ function MarkdownMessage({ content }: { content: string }) {
   const flushList = () => {
     if (listItems.length === 0) return
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
+      <ul key={`ul-${blocks.length}`} className="list-disc space-y-0.5 pl-4">
         {listItems.map((item, index) => (
           <li key={index}>{parseInlineMarkdown(item)}</li>
         ))}
@@ -188,7 +211,9 @@ function MarkdownMessage({ content }: { content: string }) {
         level === 1 ? "h2" : level === 2 ? "h3" : "h4"
       ) as "h2" | "h3" | "h4"
       const className =
-        level === 1 ? "text-base font-semibold" : "text-sm font-semibold"
+        level === 1
+          ? "text-sm font-semibold text-foreground"
+          : "text-sm font-medium text-muted-foreground"
       blocks.push(
         <HeadingTag key={`h-${blocks.length}`} className={className}>
           {parseInlineMarkdown(text)}
@@ -227,21 +252,30 @@ function MarkdownMessage({ content }: { content: string }) {
   flushParagraph()
   flushList()
 
-  return <div className="space-y-3 break-words">{blocks}</div>
+  return <div className="space-y-2 break-words">{blocks}</div>
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  isGroupStart,
+}: {
+  message: ChatMessage
+  isGroupStart: boolean
+}) {
   const isUser = message.role === "user"
   return (
     <div
-      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+      className={cn(
+        "group flex w-full",
+        isUser ? "justify-end" : "justify-start"
+      )}
     >
       <article
         className={cn(
-          "max-w-[min(44rem,85%)] rounded-lg border px-4 py-3 text-sm leading-relaxed shadow-sm",
+          "max-w-[min(44rem,85%)] rounded-xl px-4 py-2.5 text-sm leading-relaxed",
           isUser
-            ? "border-border bg-muted text-foreground"
-            : "border-border bg-card/70 text-card-foreground"
+            ? "bg-primary text-primary-foreground"
+            : "border border-border bg-card/70 text-card-foreground shadow-sm"
         )}
       >
         {isUser ? (
@@ -251,7 +285,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         )}
         <time
           dateTime={message.created_at}
-          className={cn("mt-2 block text-[0.7rem]", "text-muted-foreground")}
+          className={cn(
+            "mt-1 block text-[0.68rem] transition-opacity duration-150",
+            isUser ? "text-primary-foreground/50" : "text-muted-foreground/70",
+            isGroupStart
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100"
+          )}
         >
           {formatTime(message.created_at)}
         </time>
@@ -527,16 +567,43 @@ export function ChatPage() {
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain py-4">
         {messages.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center py-16 text-center">
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-              Send the first message to start a conversation.
-            </p>
-          </div>
+          !conversationId ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-5 py-16">
+              <p className="text-sm text-muted-foreground">
+                What can I help you with?
+              </p>
+              <div className="grid w-full max-w-sm grid-cols-2 gap-2">
+                {EXAMPLE_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => {
+                      setInput(prompt)
+                      focusComposer()
+                    }}
+                    className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center py-16 text-center">
+              <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+                No messages yet.
+              </p>
+            </div>
+          )
         ) : (
-          messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+          groupMessages(messages).map(({ message, isGroupStart }) => (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              isGroupStart={isGroupStart}
+            />
           ))
         )}
         {activeRun ? (

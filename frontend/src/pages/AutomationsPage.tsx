@@ -51,7 +51,9 @@ export function AutomationsPage() {
   const [testingAutomationId, setTestingAutomationId] = useState<string | null>(
     null
   )
-  const [testError, setTestError] = useState<string | null>(null)
+  const [testResults, setTestResults] = useState<
+    Record<string, { queued: boolean } | { error: string }>
+  >({})
 
   useDocumentTitle("Automations")
 
@@ -120,15 +122,26 @@ export function AutomationsPage() {
 
   async function handleTestAutomation(automation: Automation) {
     setTestingAutomationId(automation.id)
-    setTestError(null)
+    setTestResults((prev) => {
+      const next = { ...prev }
+      delete next[automation.id]
+      return next
+    })
     try {
-      await testMutation.mutateAsync({
+      const result = await testMutation.mutateAsync({
         params: { path: { automation_id: automation.id } },
       })
+      setTestResults((prev) => ({
+        ...prev,
+        [automation.id]: { queued: result.queued },
+      }))
     } catch (err) {
-      setTestError(
-        err instanceof Error ? err.message : "Failed to test automation"
-      )
+      setTestResults((prev) => ({
+        ...prev,
+        [automation.id]: {
+          error: err instanceof Error ? err.message : "Failed to run test",
+        },
+      }))
     } finally {
       setTestingAutomationId(null)
     }
@@ -139,10 +152,12 @@ export function AutomationsPage() {
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-page-title">Automations</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {automationsQuery.data?.count ?? automations.length} scheduled
-            automations
-          </p>
+          {(automationsQuery.data?.count ?? automations.length) > 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {automationsQuery.data?.count ?? automations.length} scheduled
+              automations
+            </p>
+          ) : null}
         </div>
         <Button type="button" onClick={handleNewAutomation}>
           <IconPlus />
@@ -155,28 +170,22 @@ export function AutomationsPage() {
       ) : automationsQuery.isError ? (
         <p className="text-sm text-destructive">Could not load automations</p>
       ) : automations.length > 0 ? (
-        <>
-          {testError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {testError}
-            </p>
-          ) : null}
-          <div className="divide-y divide-border rounded-lg border border-border">
-            {automations.map((automation) => (
-              <AutomationListItem
-                key={automation.id}
-                automation={automation}
-                onTest={handleTestAutomation}
-                onEdit={handleEditAutomation}
-                onDelete={handleDeleteClick}
-                onToggleActive={handleToggleActive}
-                isTesting={testingAutomationId === automation.id}
-                isUpdating={updateMutation.isPending}
-                isDeleting={deleteMutation.isPending}
-              />
-            ))}
-          </div>
-        </>
+        <div className="divide-y divide-border rounded-lg border border-border">
+          {automations.map((automation) => (
+            <AutomationListItem
+              key={automation.id}
+              automation={automation}
+              onTest={handleTestAutomation}
+              onEdit={handleEditAutomation}
+              onDelete={handleDeleteClick}
+              onToggleActive={handleToggleActive}
+              isTesting={testingAutomationId === automation.id}
+              isUpdating={updateMutation.isPending}
+              isDeleting={deleteMutation.isPending}
+              testResult={testResults[automation.id] ?? null}
+            />
+          ))}
+        </div>
       ) : (
         <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-muted">

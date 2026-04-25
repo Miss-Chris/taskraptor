@@ -1,3 +1,5 @@
+import { IconInbox } from "@tabler/icons-react"
+
 import type { Task } from "@/lib/tasks"
 import { TaskItem } from "@/components/tasks/TaskItem"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -36,7 +38,12 @@ export function TaskList({
   }
 
   if (tasks.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <IconInbox className="mb-3 size-8 text-muted-foreground/50" />
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+      </div>
+    )
   }
 
   return (

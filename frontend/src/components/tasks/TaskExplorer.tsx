@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   IconChevronRight,
+  IconDots,
   IconListDetails,
   IconPencil,
   IconPlus,
@@ -14,6 +15,12 @@ import { TaskFormDialog } from "@/components/tasks/TaskFormDialog"
 import { TaskList } from "@/components/tasks/TaskList"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { endSession } from "@/lib/auth"
 import { cn } from "@/lib/utils"
@@ -30,18 +37,25 @@ import {
 } from "@/queries/tasks"
 
 function formatTs(iso: string | null): string {
-  if (!iso) return "None"
+  if (!iso) return "—"
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return "None"
+  if (Number.isNaN(d.getTime())) return "—"
   return d.toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   })
 }
 
+function formatTsShort(iso: string | null): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+}
+
 function formatValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "None"
-  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "None"
+  if (value === null || value === undefined || value === "") return "—"
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "—"
   if (typeof value === "object") return JSON.stringify(value)
   return String(value).replace(/_/g, " ")
 }
@@ -66,8 +80,10 @@ function DetailRow({
 }) {
   return (
     <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm font-medium">{value}</dd>
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm font-semibold">{value}</dd>
     </div>
   )
 }
@@ -98,23 +114,23 @@ function TaskStatusIndicator({ status }: { status: string }) {
 }
 
 function HistoryRow({ audit }: { audit: TaskAuditLog }) {
+  const time = formatTsShort(audit.created_at)
   return (
-    <li className="border-b border-border py-3 last:border-b-0">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">
-            {formatAuditAction(audit.action)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {formatTs(audit.created_at)}
-          </p>
-        </div>
-      </div>
-      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-        {formatValue(audit.old_value)}{" "}
-        <IconChevronRight className="mx-1 inline size-3" />{" "}
-        <span className="text-foreground">{formatValue(audit.new_value)}</span>
-      </p>
+    <li className="flex items-baseline gap-1 border-b border-border py-2 text-xs last:border-b-0">
+      <span className="font-medium text-foreground">
+        {formatAuditAction(audit.action)}:
+      </span>
+      <span className="text-muted-foreground">
+        {formatValue(audit.old_value)}
+      </span>
+      <IconChevronRight className="inline size-3 shrink-0 text-muted-foreground/50" />
+      <span className="text-foreground">{formatValue(audit.new_value)}</span>
+      {time ? (
+        <>
+          <span className="text-muted-foreground/50">·</span>
+          <span className="text-muted-foreground">{time}</span>
+        </>
+      ) : null}
     </li>
   )
 }
@@ -255,10 +271,22 @@ export function TaskExplorer({
         {!selectedTaskId ? (
           <div className="flex min-h-[24rem] flex-col items-center justify-center p-6 text-center">
             <IconListDetails className="mb-3 size-8 text-muted-foreground" />
-            <h2 className="text-base font-semibold">No task selected</h2>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              Select a task from the list to see its details and recent history.
-            </p>
+            {!tasksLoading && tasks.length === 0 ? (
+              <>
+                <h2 className="text-base font-semibold">No tasks here</h2>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Create a new task to get started.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base font-semibold">No task selected</h2>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Select a task from the list to see its details and recent
+                  history.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -269,7 +297,7 @@ export function TaskExplorer({
                     <h2 className="min-w-0 flex-1 text-lg leading-snug font-semibold">
                       {selectedTask.name}
                     </h2>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <TaskStatusIndicator status={selectedTask.status} />
                       <Button
                         type="button"
@@ -280,15 +308,27 @@ export function TaskExplorer({
                         <IconPencil />
                         Edit
                       </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="xs"
-                        onClick={() => setDeleteDialogOpen(true)}
-                      >
-                        <IconTrash />
-                        Delete
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label="More options"
+                          >
+                            <IconDots />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => setDeleteDialogOpen(true)}
+                          >
+                            <IconTrash className="size-4" />
+                            Delete task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
