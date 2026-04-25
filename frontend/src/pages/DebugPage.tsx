@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearchParams } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
@@ -10,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import {
   fetchDebugConversation,
   fetchDebugConversations,
@@ -399,6 +400,7 @@ function DetailView({ bundle }: { bundle: DebugConversationBundle }) {
 
 export function DebugPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get("conversation")
   const [conversations, setConversations] = useState<
@@ -415,13 +417,13 @@ export function DebugPage() {
     (e: unknown) => {
       const msg = e instanceof Error ? e.message : "Failed to load debug data"
       if (msg === "SESSION_EXPIRED") {
-        clearToken()
+        endSession(queryClient)
         navigate("/login", { replace: true })
         return
       }
       setError(msg === "NOT_FOUND" ? "Conversation not found." : msg)
     },
-    [navigate]
+    [navigate, queryClient]
   )
 
   const loadList = useCallback(async () => {

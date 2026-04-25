@@ -1,7 +1,7 @@
 import createFetchClient, { type Middleware } from "openapi-fetch"
 import createClient from "openapi-react-query"
 
-import { getToken } from "@/lib/auth"
+import { getToken, NOT_FOUND_ERROR, SESSION_EXPIRED_ERROR } from "@/lib/auth"
 import type { paths } from "@/lib/api/schema"
 
 async function parseErrorDetail(response: Response): Promise<string> {
@@ -25,10 +25,10 @@ const authMiddleware: Middleware = {
   },
   async onResponse({ response }) {
     if (response.status === 401) {
-      throw new Error("SESSION_EXPIRED")
+      throw new Error(SESSION_EXPIRED_ERROR)
     }
     if (response.status === 404) {
-      throw new Error("NOT_FOUND")
+      throw new Error(NOT_FOUND_ERROR)
     }
     if (!response.ok) {
       throw new Error(await parseErrorDetail(response))

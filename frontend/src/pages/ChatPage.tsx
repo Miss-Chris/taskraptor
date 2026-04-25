@@ -1,11 +1,11 @@
-/* eslint-disable react-hooks/set-state-in-effect -- local UI state tracks OpenAPI query + polling */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, ReactNode } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import {
   fetchChatMessagesAfter,
   fetchChatRun,
@@ -184,12 +184,15 @@ function MarkdownMessage({ content }: { content: string }) {
       const marker = headingMatch[1] ?? ""
       const text = headingMatch[2] ?? ""
       const level = marker.length
+      const HeadingTag = (
+        level === 1 ? "h2" : level === 2 ? "h3" : "h4"
+      ) as "h2" | "h3" | "h4"
       const className =
         level === 1 ? "text-base font-semibold" : "text-sm font-semibold"
       blocks.push(
-        <p key={`h-${blocks.length}`} className={className}>
+        <HeadingTag key={`h-${blocks.length}`} className={className}>
           {parseInlineMarkdown(text)}
-        </p>
+        </HeadingTag>
       )
       continue
     }
@@ -247,6 +250,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           <MarkdownMessage content={message.content} />
         )}
         <time
+          dateTime={message.created_at}
           className={cn("mt-2 block text-[0.7rem]", "text-muted-foreground")}
         >
           {formatTime(message.created_at)}
@@ -258,6 +262,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 export function ChatPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { conversationId } = useParams()
   const [conversation, setConversation] = useState<ChatConversation | null>(
     null
@@ -270,6 +275,7 @@ export function ChatPage() {
   const [notFound, setNotFound] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const messagesRef = useRef<ChatMessage[]>([])
   const conversationQuery = useChatConversationQuery(conversationId)
   const startChat = useStartChatConversationMutation()
   const sendMessage = useSendChatMessageMutation()
@@ -279,6 +285,7 @@ export function ChatPage() {
 
   const latestRun = runs[0] ?? conversation?.latest_run ?? null
   const activeRun = isActiveRun(latestRun) ? latestRun : null
+  const activeRunId = activeRun?.id ?? null
   const canSend = input.trim().length > 0 && !sending && !starting
 
   const focusComposer = useCallback(() => {
@@ -300,13 +307,13 @@ export function ChatPage() {
   const handleAuthError = useCallback(
     (message: string) => {
       if (message === "SESSION_EXPIRED" || message === "Not authenticated") {
-        clearToken()
+        endSession(queryClient)
         navigate("/login", { replace: true })
         return true
       }
       return false
     },
-    [navigate]
+    [navigate, queryClient]
   )
 
   useEffect(() => {
@@ -358,6 +365,10 @@ export function ChatPage() {
   }, [messages.length, activeRun?.id])
 
   useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  useEffect(() => {
     if (loading) return
     const frame = window.requestAnimationFrame(() => {
       textareaRef.current?.focus()
@@ -366,14 +377,17 @@ export function ChatPage() {
   }, [conversationId, loading])
 
   useEffect(() => {
-    if (!conversationId || !activeRun) return
+    if (!conversationId || !activeRunId) return
 
     let cancelled = false
+    let inFlight = false
     const poll = async () => {
+      if (inFlight) return
+      inFlight = true
       try {
-        const lastMessageId = messages[messages.length - 1]?.id
+        const lastMessageId = messagesRef.current.at(-1)?.id
         const [nextRun, nextMessages] = await Promise.all([
-          fetchChatRun(activeRun.id),
+          fetchChatRun(activeRunId),
           lastMessageId
             ? fetchChatMessagesAfter(conversationId, lastMessageId)
             : Promise.resolve(null),
@@ -397,6 +411,8 @@ export function ChatPage() {
         if (!handleAuthError(message) && message !== "NOT_FOUND") {
           setError(message)
         }
+      } finally {
+        inFlight = false
       }
     }
 
@@ -406,7 +422,7 @@ export function ChatPage() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [activeRun, conversationId, handleAuthError, messages])
+  }, [activeRunId, conversationId, handleAuthError])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -553,6 +569,7 @@ export function ChatPage() {
             onKeyDown={handleComposerKeyDown}
             rows={2}
             placeholder="Message TaskRaptor"
+            aria-label="Message TaskRaptor"
             className="min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
           />
           <Button

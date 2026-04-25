@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog"
@@ -19,7 +20,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { TelegramLinkPill } from "@/components/telegram/telegram-link-pill"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import { type ChatConversation } from "@/lib/chat"
 import { useChatConversationsQuery } from "@/queries/chat"
 import { useUsageSummaryQuery } from "@/queries/usage"
@@ -53,6 +54,7 @@ function getConversationLabel(conversation: ChatConversation): string {
 
 export function AppSidebar() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { pathname } = useLocation()
   const [searchParams] = useSearchParams()
   const activeTag = searchParams.get("tag")
@@ -77,18 +79,26 @@ export function AppSidebar() {
   useEffect(() => {
     const err = facetsQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [facetsQuery.error, navigate])
+  }, [facetsQuery.error, navigate, queryClient])
 
   useEffect(() => {
     const err = conversationsQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [conversationsQuery.error, navigate])
+  }, [conversationsQuery.error, navigate, queryClient])
+
+  useEffect(() => {
+    const err = usageQuery.error
+    if (err instanceof Error && err.message === "SESSION_EXPIRED") {
+      endSession(queryClient)
+      navigate("/login", { replace: true })
+    }
+  }, [navigate, queryClient, usageQuery.error])
 
   useEffect(() => {
     const handleChatUpdated = () => {
@@ -102,7 +112,7 @@ export function AppSidebar() {
   }, [conversationsQuery.refetch])
 
   function handleLogout() {
-    clearToken()
+    endSession(queryClient)
     navigate("/login", { replace: true })
   }
 
@@ -324,9 +334,11 @@ export function AppSidebar() {
                 ) : null}
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton type="button">
-                  <IconSettings />
-                  <span>Settings</span>
+                <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+                  <NavLink to="/settings">
+                    <IconSettings />
+                    <span>Settings</span>
+                  </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

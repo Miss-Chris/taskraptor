@@ -1,4 +1,8 @@
+import type { QueryClient } from "@tanstack/react-query"
+
 const TOKEN_KEY = "taskraptor_auth_token"
+export const SESSION_EXPIRED_ERROR = "SESSION_EXPIRED"
+export const NOT_FOUND_ERROR = "NOT_FOUND"
 
 export type MeResponse = {
   id: number
@@ -18,6 +22,19 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+}
+
+export function isAuthError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message === SESSION_EXPIRED_ERROR ||
+      error.message === "Not authenticated")
+  )
+}
+
+export function endSession(queryClient?: QueryClient): void {
+  clearToken()
+  queryClient?.clear()
 }
 
 async function parseErrorDetail(res: Response): Promise<string> {

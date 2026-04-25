@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
@@ -12,8 +13,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
-import { type Task } from "@/lib/tasks"
+import { endSession } from "@/lib/auth"
+import { formatTaskDue, type Task } from "@/lib/tasks"
 import { useTaskQuery } from "@/queries/tasks"
 
 function formatTs(iso: string | null): string {
@@ -29,6 +30,7 @@ function formatTs(iso: string | null): string {
 export function TaskDetailPage() {
   const { taskId } = useParams<{ taskId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const taskQuery = useTaskQuery(taskId, { enabled: Boolean(taskId) })
   const task: Task | null = taskQuery.data ?? null
   const loading = Boolean(taskId) && taskQuery.isLoading
@@ -51,10 +53,10 @@ export function TaskDetailPage() {
   useEffect(() => {
     const err = taskQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [taskQuery.error, navigate])
+  }, [taskQuery.error, navigate, queryClient])
 
   if (loading) {
     return (
@@ -105,7 +107,7 @@ export function TaskDetailPage() {
             </div>
             <div>
               <dt className="text-muted-foreground">Due at</dt>
-              <dd className="font-medium">{formatTs(task.due_at)}</dd>
+              <dd className="font-medium">{formatTaskDue(task)}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Remind at</dt>

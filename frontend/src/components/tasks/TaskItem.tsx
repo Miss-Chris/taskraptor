@@ -1,28 +1,8 @@
 import { Link } from "react-router-dom"
 
-import type { Task } from "@/lib/tasks"
+import { formatTaskDue, type Task } from "@/lib/tasks"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { cn } from "@/lib/utils"
-
-function formatDue(dueAt: string | null, dueType: Task["due_type"]): string {
-  if (!dueAt) return "—"
-  const d = new Date(dueAt)
-  if (Number.isNaN(d.getTime())) return "—"
-  if (dueType === "date") {
-    return d.toLocaleDateString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
-  }
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
-}
 
 function TaskItemContent({ task }: { task: Task }) {
   return (
@@ -45,7 +25,7 @@ function TaskItemContent({ task }: { task: Task }) {
         <span>
           Due:{" "}
           <span className="text-foreground">
-            {formatDue(task.due_at, task.due_type)}
+            {formatTaskDue(task)}
           </span>
         </span>
         <span className="text-xs">Priority {task.priority}</span>

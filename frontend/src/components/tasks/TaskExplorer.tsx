@@ -1,13 +1,28 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { IconChevronRight, IconListDetails } from "@tabler/icons-react"
+import {
+  IconChevronRight,
+  IconListDetails,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react"
 
+import { DeleteTaskDialog } from "@/components/tasks/DeleteTaskDialog"
+import { TaskFormDialog } from "@/components/tasks/TaskFormDialog"
 import { TaskList } from "@/components/tasks/TaskList"
 import { TaskTag } from "@/components/tasks/TaskTag"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import { cn } from "@/lib/utils"
-import { type ListTasksParams, type Task, type TaskAuditLog } from "@/lib/tasks"
+import {
+  formatTaskDue,
+  type ListTasksParams,
+  type Task,
+  type TaskAuditLog,
+} from "@/lib/tasks"
 import {
   useTaskAuditLogsQuery,
   useTaskQuery,
@@ -118,7 +133,11 @@ export function TaskExplorer({
   transformTasks?: (tasks: Task[]) => Task[]
 }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const requestedTaskId = searchParams.get("task")
   const tasksQuery = useTasksQuery(listParams)
   const tasks = useMemo(() => {
@@ -170,18 +189,29 @@ export function TaskExplorer({
   useEffect(() => {
     const err = tasksQuery.error ?? taskQuery.error ?? auditQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [tasksQuery.error, taskQuery.error, auditQuery.error, navigate])
+  }, [tasksQuery.error, taskQuery.error, auditQuery.error, navigate, queryClient])
 
-  function selectTask(task: Task) {
+  function setSelectedTask(taskId: string) {
     const nextParams = new URLSearchParams(searchParams)
-    nextParams.set("task", task.id)
+    nextParams.set("task", taskId)
     setSearchParams(nextParams, { replace: true })
   }
 
+  function clearSelectedTask() {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete("task")
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  function selectTask(task: Task) {
+    setSelectedTask(task.id)
+  }
+
   return (
+    <>
     <div className="grid h-full min-h-[calc(100vh-7rem)] w-full gap-4 lg:grid-cols-[minmax(24rem,0.9fr)_minmax(24rem,1.1fr)]">
       <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-lg border border-border bg-card/40">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -193,11 +223,21 @@ export function TaskExplorer({
                 : `${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
             </p>
           </div>
-          {activeFilterLabel ? (
-            <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
-              {activeFilterLabel}
-            </span>
-          ) : null}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            {activeFilterLabel ? (
+              <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+                {activeFilterLabel}
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              <IconPlus />
+              New task
+            </Button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-3">
           <TaskList
@@ -229,7 +269,27 @@ export function TaskExplorer({
                     <h2 className="min-w-0 flex-1 text-lg leading-snug font-semibold">
                       {selectedTask.name}
                     </h2>
-                    <TaskStatusIndicator status={selectedTask.status} />
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <TaskStatusIndicator status={selectedTask.status} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setEditDialogOpen(true)}
+                      >
+                        <IconPencil />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="xs"
+                        onClick={() => setDeleteDialogOpen(true)}
+                      >
+                        <IconTrash />
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedTask.tags.length > 0 ? (
@@ -263,7 +323,7 @@ export function TaskExplorer({
                     <DetailRow label="Due type" value={selectedTask.due_type} />
                     <DetailRow
                       label="Due"
-                      value={formatTs(selectedTask.due_at)}
+                      value={formatTaskDue(selectedTask)}
                     />
                     <DetailRow
                       label="Reminder"
@@ -321,5 +381,31 @@ export function TaskExplorer({
         )}
       </section>
     </div>
+    <TaskFormDialog
+      key={createDialogOpen ? "create-task-open" : "create-task-closed"}
+      mode="create"
+      open={createDialogOpen}
+      onOpenChange={setCreateDialogOpen}
+      onSaved={(task) => setSelectedTask(task.id)}
+    />
+    <TaskFormDialog
+      key={
+        selectedTask
+          ? `edit-${selectedTask.id}-${editDialogOpen ? "open" : "closed"}`
+          : "edit-task"
+      }
+      mode="edit"
+      task={selectedTask}
+      open={editDialogOpen}
+      onOpenChange={setEditDialogOpen}
+      onSaved={(task) => setSelectedTask(task.id)}
+    />
+    <DeleteTaskDialog
+      task={selectedTask}
+      open={deleteDialogOpen}
+      onOpenChange={setDeleteDialogOpen}
+      onDeleted={clearSelectedTask}
+    />
+    </>
   )
 }

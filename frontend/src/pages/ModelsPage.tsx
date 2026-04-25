@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import {
   IconCheck,
@@ -25,7 +26,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import {
   formatTokenCount,
@@ -472,6 +473,7 @@ function ModelRow({
 
 export function ModelsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const usageQuery = useUsageSummaryQuery()
   const createMutation = useCreateLlmModelMutation()
   const updateMutation = useUpdateLlmModelMutation()
@@ -492,10 +494,10 @@ export function ModelsPage() {
   useEffect(() => {
     const err = usageQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [navigate, usageQuery.error])
+  }, [navigate, queryClient, usageQuery.error])
 
   const summary = usageQuery.data
   const models = useMemo(() => summary?.models ?? [], [summary?.models])

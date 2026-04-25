@@ -4,7 +4,7 @@ import pytest
 from django.test import Client
 from django.utils import timezone
 
-from tasks.models import TaskStatus
+from tasks.models import AuditAction, Task, TaskAuditLog, TaskStatus
 from tasks.services import create_task, update_task
 
 REGISTER_URL = "/api/auth/register"
@@ -25,6 +25,10 @@ def _register_and_token(client, email: str) -> str:
     )
     assert reg.status_code == 201
     return reg.json()["token"]
+
+
+def _auth(token: str) -> dict[str, str]:
+    return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
 
 @pytest.mark.django_db
@@ -49,6 +53,247 @@ def test_get_task_audit_logs_unauthenticated(client):
     from uuid import uuid4
 
     assert client.get(f"/api/tasks/{uuid4()}/audit-logs").status_code == 401
+
+
+@pytest.mark.django_db
+def test_create_task_unauthenticated(client):
+    assert (
+        client.post(
+            LIST_URL,
+            data={"name": "Nope"},
+            content_type="application/json",
+        ).status_code
+        == 401
+    )
+
+
+@pytest.mark.django_db
+def test_update_task_unauthenticated(client):
+    from uuid import uuid4
+
+    assert (
+        client.patch(
+            f"/api/tasks/{uuid4()}",
+            data={"name": "Nope"},
+            content_type="application/json",
+        ).status_code
+        == 401
+    )
+
+
+@pytest.mark.django_db
+def test_delete_task_unauthenticated(client):
+    from uuid import uuid4
+
+    assert client.delete(f"/api/tasks/{uuid4()}").status_code == 401
+
+
+@pytest.mark.django_db
+def test_create_task_success_with_due_date_normalization(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "create-task@example.com")
+    user = User.objects.get(email="create-task@example.com")
+    user.timezone = "America/Toronto"
+    user.save(update_fields=["timezone"])
+
+    response = client.post(
+        LIST_URL,
+        data={
+            "name": "  File taxes  ",
+            "priority": 3,
+            "due_at": "2026-04-10",
+            "tags": ["personal"],
+        },
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "File taxes"
+    assert body["status"] == TaskStatus.PENDING
+    assert body["priority"] == 3
+    assert body["due_type"] == "date"
+    assert body["due_date_local"] == "2026-04-10"
+    assert body["tags"] == ["personal"]
+
+    task = Task.objects.get(pk=body["id"])
+    assert task.user == user
+    assert task.due_at is not None
+
+
+@pytest.mark.django_db
+def test_create_task_rejects_blank_name(client):
+    token = _register_and_token(client, "blank-create@example.com")
+
+    response = client.post(
+        LIST_URL,
+        data={"name": "   "},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Name cannot be blank."
+
+
+@pytest.mark.django_db
+def test_create_task_rejects_invalid_due_at(client):
+    token = _register_and_token(client, "bad-due-create@example.com")
+
+    response = client.post(
+        LIST_URL,
+        data={"name": "Bad date", "due_at": "not-a-date"},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid due_at."
+
+
+@pytest.mark.django_db
+def test_update_task_success_audits_changes_and_sets_completed_at(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "update-task@example.com")
+    user = User.objects.get(email="update-task@example.com")
+    task = create_task(user_id=user.pk, name="Initial", tags=["work"], priority=1)
+
+    response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={
+            "name": "  Renamed  ",
+            "status": TaskStatus.COMPLETED,
+            "priority": 5,
+            "tags": ["done"],
+        },
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Renamed"
+    assert body["status"] == TaskStatus.COMPLETED
+    assert body["priority"] == 5
+    assert body["tags"] == ["done"]
+    assert body["completed_at"] is not None
+
+    actions = set(
+        TaskAuditLog.objects.filter(task=task).values_list("action", flat=True)
+    )
+    assert actions == {
+        AuditAction.NAME_CHANGED,
+        AuditAction.STATUS_CHANGED,
+        AuditAction.PRIORITY_CHANGED,
+        AuditAction.TAGS_CHANGED,
+    }
+
+
+@pytest.mark.django_db
+def test_update_task_can_clear_due_at(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "clear-due@example.com")
+    user = User.objects.get(email="clear-due@example.com")
+    task = create_task(
+        user_id=user.pk,
+        name="Has due date",
+        due_at=datetime(2026, 4, 10, 13, 30, tzinfo=UTC),
+    )
+
+    response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={"clear_due_at": True},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["due_at"] is None
+    task.refresh_from_db()
+    assert task.due_at is None
+
+
+@pytest.mark.django_db
+def test_update_task_rejects_due_at_with_clear_due_at(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "bad-clear-due@example.com")
+    user = User.objects.get(email="bad-clear-due@example.com")
+    task = create_task(user_id=user.pk, name="Has due date")
+
+    response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={"due_at": "2026-04-10T10:00:00", "clear_due_at": True},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "Cannot set due_at and clear_due_at in the same update."
+    )
+
+
+@pytest.mark.django_db
+def test_update_task_404_for_other_user(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "update-a@example.com")
+    other = User.objects.create_user("update-b@example.com", "secret123")
+    task = create_task(user_id=other.pk, name="Secret")
+
+    response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={"name": "Stolen"},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_delete_task_soft_deletes_and_audits(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "delete-task@example.com")
+    user = User.objects.get(email="delete-task@example.com")
+    task = create_task(user_id=user.pk, name="Delete me")
+
+    response = client.delete(f"/api/tasks/{task.pk}", **_auth(token))
+
+    assert response.status_code == 204
+    task.refresh_from_db()
+    assert task.deleted_at is not None
+    assert TaskAuditLog.objects.filter(
+        task=task,
+        action=AuditAction.DELETED,
+        actor_id=user.pk,
+    ).exists()
+
+    list_response = client.get(LIST_URL, **_auth(token))
+    assert list_response.status_code == 200
+    assert list_response.json()["tasks"] == []
+
+
+@pytest.mark.django_db
+def test_delete_task_404_for_other_user(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "delete-a@example.com")
+    other = User.objects.create_user("delete-b@example.com", "secret123")
+    task = create_task(user_id=other.pk, name="Secret")
+
+    response = client.delete(f"/api/tasks/{task.pk}", **_auth(token))
+
+    assert response.status_code == 404
+    task.refresh_from_db()
+    assert task.deleted_at is None
 
 
 @pytest.mark.django_db

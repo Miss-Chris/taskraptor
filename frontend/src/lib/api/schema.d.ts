@@ -383,7 +383,8 @@ export interface paths {
         /** List Tasks */
         get: operations["tasks_api_list_tasks"];
         put?: never;
-        post?: never;
+        /** Create Task Endpoint */
+        post: operations["tasks_api_create_task_endpoint"];
         delete?: never;
         options?: never;
         head?: never;
@@ -418,10 +419,12 @@ export interface paths {
         get: operations["tasks_api_get_task"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Task Endpoint */
+        delete: operations["tasks_api_delete_task_endpoint"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Task Endpoint */
+        patch: operations["tasks_api_update_task_endpoint"];
         trace?: never;
     };
     "/api/usage/summary": {
@@ -1158,6 +1161,21 @@ export interface components {
              */
             created_at: string;
         };
+        /** TaskCreateIn */
+        TaskCreateIn: {
+            /** Name */
+            name: string;
+            /** Status */
+            status?: ("pending" | "in_progress" | "completed" | "cancelled") | null;
+            /** Priority */
+            priority?: number | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Due Type */
+            due_type?: ("date" | "time") | null;
+            /** Tags */
+            tags?: string[];
+        };
         /** TaskAuditLogListOut */
         TaskAuditLogListOut: {
             /** Audit Logs */
@@ -1188,6 +1206,23 @@ export interface components {
             new_value: unknown;
             /** Actor Id */
             actor_id: string | null;
+        };
+        /** TaskUpdateIn */
+        TaskUpdateIn: {
+            /** Name */
+            name?: string | null;
+            /** Status */
+            status?: ("pending" | "in_progress" | "completed" | "cancelled") | null;
+            /** Priority */
+            priority?: number | null;
+            /** Due At */
+            due_at?: string | null;
+            /** Due Type */
+            due_type?: ("date" | "time") | null;
+            /** Clear Due At */
+            clear_due_at?: boolean | null;
+            /** Tags */
+            tags?: string[] | null;
         };
         /** SupportedModelOptionOut */
         SupportedModelOptionOut: {
@@ -2440,6 +2475,48 @@ export interface operations {
             };
         };
     };
+    tasks_api_create_task_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     tasks_api_get_task_audit_logs: {
         parameters: {
             query?: never;
@@ -2498,6 +2575,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    tasks_api_delete_task_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    tasks_api_update_task_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
             /** @description Unauthorized */

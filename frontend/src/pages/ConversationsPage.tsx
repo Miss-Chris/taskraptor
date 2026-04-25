@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog"
 import { Button } from "@/components/ui/button"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import { type ChatConversation } from "@/lib/chat"
 import { cn } from "@/lib/utils"
 import { useChatConversationsQuery } from "@/queries/chat"
@@ -35,6 +36,7 @@ function formatUpdatedAt(value: string): string {
 
 export function ConversationsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const conversationsQuery = useChatConversationsQuery(200)
   const [deleteTarget, setDeleteTarget] = useState<ChatConversation | null>(
     null
@@ -45,10 +47,10 @@ export function ConversationsPage() {
   useEffect(() => {
     const err = conversationsQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [conversationsQuery.error, navigate])
+  }, [conversationsQuery.error, navigate, queryClient])
 
   const conversations = conversationsQuery.data?.conversations ?? []
 

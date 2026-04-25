@@ -9,9 +9,12 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 }
 
 const STATUS_CLASS: Record<TaskStatus, string> = {
-  pending: "bg-amber-500/15 text-amber-200 border-amber-500/30",
-  in_progress: "bg-sky-500/15 text-sky-200 border-sky-500/30",
-  completed: "bg-emerald-500/15 text-emerald-200 border-emerald-500/30",
+  pending:
+    "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-200",
+  in_progress:
+    "bg-sky-500/15 text-sky-700 border-sky-500/30 dark:text-sky-200",
+  completed:
+    "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-200",
   cancelled: "bg-muted text-muted-foreground border-border",
 }
 

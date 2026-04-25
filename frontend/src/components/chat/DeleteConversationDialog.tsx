@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import { type ChatConversation } from "@/lib/chat"
 import { useDeleteChatConversationMutation } from "@/queries/chat"
 
@@ -38,6 +39,7 @@ export function DeleteConversationDialog({
   onDeleted,
   onAuthExpired,
 }: DeleteConversationDialogProps) {
+  const queryClient = useQueryClient()
   const deleteConversation = useDeleteChatConversationMutation()
   const [error, setError] = useState<string | null>(null)
 
@@ -54,7 +56,7 @@ export function DeleteConversationDialog({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to delete conversation"
       if (message === "SESSION_EXPIRED" || message === "Not authenticated") {
-        clearToken()
+        endSession(queryClient)
         onAuthExpired()
         return
       }

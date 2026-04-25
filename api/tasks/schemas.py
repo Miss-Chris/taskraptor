@@ -1,8 +1,12 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from ninja import Schema
+from pydantic import Field
+
+TaskStatusValue = Literal["pending", "in_progress", "completed", "cancelled"]
+DueTypeValue = Literal["date", "time"]
 
 
 class TaskOut(Schema):
@@ -25,6 +29,25 @@ class TaskOut(Schema):
 class TaskListOut(Schema):
     tasks: list[TaskOut]
     count: int
+
+
+class TaskCreateIn(Schema):
+    name: str
+    status: TaskStatusValue | None = None
+    priority: int | None = None
+    due_at: str | None = None
+    due_type: DueTypeValue | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class TaskUpdateIn(Schema):
+    name: str | None = None
+    status: TaskStatusValue | None = None
+    priority: int | None = None
+    due_at: str | None = None
+    due_type: DueTypeValue | None = None
+    clear_due_at: bool | None = None
+    tags: list[str] | None = None
 
 
 class StatusCountItem(Schema):

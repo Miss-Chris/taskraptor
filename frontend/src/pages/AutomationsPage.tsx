@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 
 import { AutomationDialog } from "@/components/automations/AutomationDialog"
@@ -17,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useDocumentTitle } from "@/hooks/use-document-title"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import type {
   Automation,
   AutomationCreateInput,
@@ -34,6 +35,7 @@ import { IconPlus, IconRobot } from "@tabler/icons-react"
 
 export function AutomationsPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const automationsQuery = useAutomationsQuery()
   const createMutation = useCreateAutomationMutation()
   const updateMutation = useUpdateAutomationMutation()
@@ -56,10 +58,10 @@ export function AutomationsPage() {
   useEffect(() => {
     const err = automationsQuery.error
     if (err instanceof Error && err.message === "SESSION_EXPIRED") {
-      clearToken()
+      endSession(queryClient)
       navigate("/login", { replace: true })
     }
-  }, [automationsQuery.error, navigate])
+  }, [automationsQuery.error, navigate, queryClient])
 
   const automations = automationsQuery.data?.automations ?? []
   const isEditMode = editingAutomation != null

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
@@ -10,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { clearToken } from "@/lib/auth"
+import { endSession } from "@/lib/auth"
 import {
   createTelegramJoinCode,
   fetchTelegramStatus,
@@ -26,6 +27,7 @@ function telegramUsernameForUrl(botName: string): string {
 
 export function TelegramLinkPill() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<TelegramStatusResponse | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
@@ -43,7 +45,7 @@ export function TelegramLinkPill() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not load Telegram status"
       if (msg === "Not authenticated" || msg === "SESSION_EXPIRED") {
-        clearToken()
+        endSession(queryClient)
         navigate("/login", { replace: true })
         return
       }
@@ -51,7 +53,7 @@ export function TelegramLinkPill() {
     } finally {
       setStatusLoading(false)
     }
-  }, [navigate])
+  }, [navigate, queryClient])
 
   useEffect(() => {
     void loadStatus()
@@ -66,7 +68,7 @@ export function TelegramLinkPill() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not create join code"
       if (msg === "Not authenticated" || msg === "SESSION_EXPIRED") {
-        clearToken()
+        endSession(queryClient)
         navigate("/login", { replace: true })
         return
       }

@@ -9,6 +9,7 @@ import { DebugPage } from "@/pages/DebugPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { ModelsPage } from "@/pages/ModelsPage"
 import { RegisterPage } from "@/pages/RegisterPage"
+import { SettingsPage } from "@/pages/SettingsPage"
 import { TaskDetailPage } from "@/pages/TaskDetailPage"
 import { TasksPage } from "@/pages/TasksPage"
 import { UpcomingTasksPage } from "@/pages/UpcomingTasksPage"
@@ -33,6 +34,7 @@ export function App() {
           <Route path="conversations" element={<ConversationsPage />} />
           <Route path="debug" element={<DebugPage />} />
           <Route path="models" element={<ModelsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/upcoming" element={<UpcomingTasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailPage />} />
