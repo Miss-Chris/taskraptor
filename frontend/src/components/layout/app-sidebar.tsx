@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom"
+import { Collapsible } from "radix-ui"
 
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog"
 import { UsageMeter } from "@/components/usage/UsageMeter"
@@ -31,6 +32,7 @@ import {
   IconChartBar,
   IconCheckbox,
   IconBug,
+  IconChevronRight,
   IconLogout,
   IconMessages,
   IconMessagePlus,
@@ -63,6 +65,8 @@ export function AppSidebar() {
   const conversationsQuery = useChatConversationsQuery(6)
   const usageQuery = useUsageSummaryQuery()
   const [tagsExpanded, setTagsExpanded] = useState(false)
+  const [tagsOpen, setTagsOpen] = useState(true)
+  const [conversationsOpen, setConversationsOpen] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<ChatConversation | null>(null)
 
   const facets: TaskFacets | null = facetsQuery.data ?? null
@@ -140,7 +144,6 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="py-2">
-          <SidebarGroupLabel>Chat</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -154,60 +157,72 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <SidebarMenu className="mt-0.5">
-              {chatLoading ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
-                    <span className="truncate">Loading chats...</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : chatError ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton type="button" size="sm" className="text-destructive">
-                    <span className="truncate">Could not load chats</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : conversations.length > 0 ? (
-                conversations.map((conversation) => (
-                  <SidebarMenuItem key={conversation.id}>
-                    <SidebarMenuButton
-                      asChild
-                      size="sm"
-                      className="pr-8"
-                      isActive={activeConversationId === conversation.id}
-                    >
-                      <NavLink to={`/c/${conversation.id}`}>
-                        <span className="truncate">{getConversationLabel(conversation)}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                    <SidebarMenuAction
-                      type="button"
-                      aria-label="Delete conversation"
-                      onClick={() => setDeleteTarget(conversation)}
-                    >
-                      <IconTrash />
-                    </SidebarMenuAction>
-                  </SidebarMenuItem>
-                ))
-              ) : (
-                <SidebarMenuItem>
-                  <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
-                    <span className="truncate">No conversations yet</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {hasMoreConversations ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild size="sm" isActive={conversationsActive}>
-                    <NavLink to="/conversations">
-                      <IconMessages className="size-3.5" />
-                      <span>All Conversations</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : null}
-            </SidebarMenu>
           </SidebarGroupContent>
+          <Collapsible.Root open={conversationsOpen} onOpenChange={setConversationsOpen} className="group/conversations">
+            <SidebarGroupLabel asChild>
+              <Collapsible.Trigger className="flex w-full cursor-pointer items-center">
+                Recent
+                <IconChevronRight className="ml-auto size-3.5 transition-transform duration-200 group-data-[state=open]/conversations:rotate-90" />
+              </Collapsible.Trigger>
+            </SidebarGroupLabel>
+            <Collapsible.Content>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {chatLoading ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
+                        <span className="truncate">Loading chats...</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : chatError ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton type="button" size="sm" className="text-destructive">
+                        <span className="truncate">Could not load chats</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : conversations.length > 0 ? (
+                    conversations.map((conversation) => (
+                      <SidebarMenuItem key={conversation.id}>
+                        <SidebarMenuButton
+                          asChild
+                          size="sm"
+                          className="pr-8"
+                          isActive={activeConversationId === conversation.id}
+                        >
+                          <NavLink to={`/c/${conversation.id}`}>
+                            <span className="truncate">{getConversationLabel(conversation)}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                        <SidebarMenuAction
+                          type="button"
+                          aria-label="Delete conversation"
+                          onClick={() => setDeleteTarget(conversation)}
+                        >
+                          <IconTrash />
+                        </SidebarMenuAction>
+                      </SidebarMenuItem>
+                    ))
+                  ) : (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
+                        <span className="truncate">No conversations yet</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  {hasMoreConversations ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild size="sm" isActive={conversationsActive}>
+                        <NavLink to="/conversations">
+                          <IconMessages className="size-3.5" />
+                          <span>All Conversations</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : null}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </Collapsible.Content>
+          </Collapsible.Root>
         </SidebarGroup>
 
         <SidebarSeparator />
@@ -240,43 +255,52 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/45">Tags</p>
-            <SidebarMenu className="mt-1">
-              {visibleTagCounts.length > 0 ? (
-                visibleTagCounts.map((row) => {
-                  const isTagActive = pathname === "/tasks" && activeTag === row.tag
-                  return (
-                    <SidebarMenuItem key={row.tag}>
-                      <SidebarMenuButton asChild isActive={isTagActive} size="sm" className="pr-9">
-                        <NavLink to={`/tasks?tag=${encodeURIComponent(row.tag)}`}>
-                          <IconTag className="size-3.5" />
-                          <span className="truncate">{row.tag}</span>
-                        </NavLink>
+            <Collapsible.Root open={tagsOpen} onOpenChange={setTagsOpen} className="group/tags">
+              <SidebarGroupLabel asChild>
+                <Collapsible.Trigger className="flex w-full cursor-pointer items-center px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/45">
+                  Tags
+                  <IconChevronRight className="ml-auto size-3 transition-transform duration-200 group-data-[state=open]/tags:rotate-90" />
+                </Collapsible.Trigger>
+              </SidebarGroupLabel>
+              <Collapsible.Content>
+                <SidebarMenu className="mt-1">
+                  {visibleTagCounts.length > 0 ? (
+                    visibleTagCounts.map((row) => {
+                      const isTagActive = pathname === "/tasks" && activeTag === row.tag
+                      return (
+                        <SidebarMenuItem key={row.tag}>
+                          <SidebarMenuButton asChild isActive={isTagActive} size="sm" className="pr-9">
+                            <NavLink to={`/tasks?tag=${encodeURIComponent(row.tag)}`}>
+                              <IconTag className="size-3.5" />
+                              <span className="truncate">{row.tag}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                          <SidebarMenuBadge>{row.count}</SidebarMenuBadge>
+                        </SidebarMenuItem>
+                      )
+                    })
+                  ) : (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
+                        <span className="truncate">No tags yet</span>
                       </SidebarMenuButton>
-                      <SidebarMenuBadge>{row.count}</SidebarMenuBadge>
                     </SidebarMenuItem>
-                  )
-                })
-              ) : (
-                <SidebarMenuItem>
-                  <SidebarMenuButton type="button" size="sm" className="text-muted-foreground">
-                    <span className="truncate">No tags yet</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {canToggleTags ? (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    type="button"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={() => setTagsExpanded((expanded) => !expanded)}
-                  >
-                    <span>{tagsExpanded ? "Show fewer" : "Show 5 more"}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ) : null}
-            </SidebarMenu>
+                  )}
+                  {canToggleTags ? (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        type="button"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={() => setTagsExpanded((expanded) => !expanded)}
+                      >
+                        <span>{tagsExpanded ? "Show fewer" : "Show 5 more"}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ) : null}
+                </SidebarMenu>
+              </Collapsible.Content>
+            </Collapsible.Root>
           </SidebarGroupContent>
         </SidebarGroup>
 
