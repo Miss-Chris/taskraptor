@@ -2,7 +2,10 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { AutomationDialog } from "@/components/automations/AutomationDialog"
-import { AutomationListItem, AutomationListSkeleton } from "@/components/automations/AutomationListItem"
+import {
+  AutomationListItem,
+  AutomationListSkeleton,
+} from "@/components/automations/AutomationListItem"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -13,8 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { clearToken } from "@/lib/auth"
-import type { Automation, AutomationCreateInput, AutomationUpdateInput } from "@/lib/automations"
+import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationUpdateInput,
+} from "@/lib/automations"
 import {
   useAutomationsQuery,
   useCreateAutomationMutation,
@@ -31,9 +39,13 @@ export function AutomationsPage() {
   const deleteMutation = useDeleteAutomationMutation()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingAutomation, setEditingAutomation] = useState<Automation | null>(null)
+  const [editingAutomation, setEditingAutomation] = useState<Automation | null>(
+    null
+  )
   const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  useDocumentTitle("Automations")
 
   useEffect(() => {
     const err = automationsQuery.error
@@ -56,7 +68,9 @@ export function AutomationsPage() {
     setDialogOpen(true)
   }
 
-  async function handleSubmit(data: AutomationCreateInput | AutomationUpdateInput) {
+  async function handleSubmit(
+    data: AutomationCreateInput | AutomationUpdateInput
+  ) {
     if (isEditMode && editingAutomation) {
       await updateMutation.mutateAsync({
         params: { path: { automation_id: editingAutomation.id } },
@@ -83,7 +97,9 @@ export function AutomationsPage() {
       })
       setDeleteTarget(null)
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Failed to delete automation")
+      setDeleteError(
+        err instanceof Error ? err.message : "Failed to delete automation"
+      )
     }
   }
 
@@ -99,8 +115,9 @@ export function AutomationsPage() {
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Automations</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {automationsQuery.data?.count ?? automations.length} scheduled automations
+          <p className="mt-1 text-sm text-muted-foreground">
+            {automationsQuery.data?.count ?? automations.length} scheduled
+            automations
           </p>
         </div>
         <Button type="button" onClick={handleNewAutomation}>
@@ -112,7 +129,7 @@ export function AutomationsPage() {
       {automationsQuery.isLoading ? (
         <AutomationListSkeleton count={3} />
       ) : automationsQuery.isError ? (
-        <p className="text-destructive text-sm">Could not load automations</p>
+        <p className="text-sm text-destructive">Could not load automations</p>
       ) : automations.length > 0 ? (
         <div className="divide-y divide-border rounded-lg border border-border">
           {automations.map((automation) => (
@@ -129,12 +146,12 @@ export function AutomationsPage() {
         </div>
       ) : (
         <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
-          <div className="bg-muted flex size-12 items-center justify-center rounded-full">
-            <IconRobot className="text-muted-foreground size-6" />
+          <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+            <IconRobot className="size-6 text-muted-foreground" />
           </div>
           <div>
             <p className="text-sm font-medium">No automations yet</p>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <p className="mt-1 text-sm text-muted-foreground">
               Create an automation to run prompts on a schedule
             </p>
           </div>
@@ -176,13 +193,17 @@ export function AutomationsPage() {
             </DialogDescription>
           </DialogHeader>
           {deleteError ? (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-sm text-destructive" role="alert">
               {deleteError}
             </p>
           ) : null}
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={deleteMutation.isPending}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleteMutation.isPending}
+              >
                 Cancel
               </Button>
             </DialogClose>

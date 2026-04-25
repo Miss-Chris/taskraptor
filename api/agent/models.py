@@ -77,11 +77,11 @@ class LlmModel(models.Model):
     quota = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="Max usage units (total tokens) for system_free; null means unlimited.",
+        help_text="Max request count for system_free; null means unlimited.",
     )
     quota_used = models.PositiveIntegerField(
         default=0,
-        help_text="Cumulative usage (total tokens) counted for system_free tier.",
+        help_text="Cumulative request count for the system_free tier.",
     )
     quota_expires_at = models.DateTimeField(
         null=True,
@@ -255,7 +255,7 @@ def get_or_create_system_model(user) -> LlmModel:
     Return the system_free LlmModel for ``user``, creating it if absent.
 
     Safe to call multiple times — the unique constraint on (user, system_free)
-    guarantees at most one row per user.  quota=None means no token cap. The
+    guarantees at most one row per user.  quota=None means no request cap. The
     system model is active by default only when the user has no active model.
     """
     model, _ = LlmModel.objects.get_or_create(
@@ -263,6 +263,7 @@ def get_or_create_system_model(user) -> LlmModel:
         model_key=SYSTEM_FREE_MODEL_KEY,
         defaults={
             "is_active": not LlmModel.objects.filter(user=user, is_active=True).exists(),
+            "quota": getattr(settings, "SYSTEM_FREE_MONTHLY_REQUEST_QUOTA", 50),
         },
     )
     return model

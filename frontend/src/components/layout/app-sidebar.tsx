@@ -316,6 +316,8 @@ export function AppSidebar() {
                       quotaUsed={activeSystemModel.quota_used}
                       quotaRemaining={activeSystemModel.quota_remaining}
                       isAvailable={activeSystemModel.is_available}
+                      unitSingular="request"
+                      unitPlural="requests"
                       compact
                     />
                   </div>

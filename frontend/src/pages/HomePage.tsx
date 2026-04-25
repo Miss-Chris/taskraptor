@@ -8,12 +8,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { clearToken, fetchMe, type MeResponse } from "@/lib/auth"
 
 export function HomePage() {
   const navigate = useNavigate()
   const [me, setMe] = useState<MeResponse | null>(null)
   const [loading, setLoading] = useState(true)
+
+  useDocumentTitle("Home")
 
   useEffect(() => {
     let cancelled = false
@@ -36,7 +39,7 @@ export function HomePage() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center py-12">
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -47,13 +50,15 @@ export function HomePage() {
         <CardHeader>
           <CardTitle>Home</CardTitle>
           <CardDescription>
-            Signed in as <span className="text-foreground font-medium">{me?.email}</span>
+            Signed in as{" "}
+            <span className="font-medium text-foreground">{me?.email}</span>
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-muted-foreground text-sm leading-relaxed">
+        <CardContent className="text-sm leading-relaxed text-muted-foreground">
           <p>Placeholder home. Chat, tasks, and more will show up here.</p>
           <p className="mt-2 font-mono text-xs">
-            (Press <kbd className="rounded border px-1">d</kbd> to toggle dark mode)
+            (Press <kbd className="rounded border px-1">d</kbd> to toggle dark
+            mode)
           </p>
         </CardContent>
       </Card>

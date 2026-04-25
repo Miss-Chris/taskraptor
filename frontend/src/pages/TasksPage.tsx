@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 
 import { TaskExplorer } from "@/components/tasks/TaskExplorer"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "All tasks" },
@@ -28,6 +29,8 @@ export function TasksPage() {
     ? `#${tag}`
     : (STATUS_OPTIONS.find((option) => option.value === status)?.label ??
       "Tasks")
+  useDocumentTitle(title)
+
   const activeFilterLabel = tag
     ? `Tagged ${tag}`
     : status

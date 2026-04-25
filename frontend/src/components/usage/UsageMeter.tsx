@@ -6,6 +6,8 @@ type UsageMeterProps = {
   quotaUsed: number
   quotaRemaining: number | null
   isAvailable: boolean
+  unitSingular?: string
+  unitPlural?: string
   compact?: boolean
   className?: string
 }
@@ -15,20 +17,23 @@ export function UsageMeter({
   quotaUsed,
   quotaRemaining,
   isAvailable,
+  unitSingular = "token",
+  unitPlural = "tokens",
   compact = false,
   className,
 }: UsageMeterProps) {
   const percent = getQuotaPercent(quota, quotaUsed)
   const unlimited = quota == null
   const exhausted = !unlimited && (quotaRemaining ?? 0) <= 0
+  const unitFor = (value: number | null | undefined) => (value === 1 ? unitSingular : unitPlural)
   const label = unlimited
-    ? `${formatTokenCount(quotaUsed)} tokens used`
-    : `${formatTokenCount(quotaUsed)} of ${formatTokenCount(quota)} tokens`
+    ? `${formatTokenCount(quotaUsed)} ${unitFor(quotaUsed)} used`
+    : `${formatTokenCount(quotaUsed)} of ${formatTokenCount(quota)} ${unitFor(quota)}`
   const secondaryLabel = unlimited
     ? "Unlimited"
     : exhausted
       ? "Exhausted"
-      : `${formatTokenCount(quotaRemaining)} left`
+      : `${formatTokenCount(quotaRemaining)} ${unitFor(quotaRemaining)} left`
 
   return (
     <div className={cn("space-y-1.5", className)}>

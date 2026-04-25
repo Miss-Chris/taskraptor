@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
-from django.db.models import F
 from django.utils import timezone
 from litellm import completion
 
@@ -57,36 +56,28 @@ def _resolve_api_key(llm_model: LlmModel) -> str:
     return key
 
 
-def _total_tokens_from_response(response: Any) -> int:
-    usage = getattr(response, "usage", None)
-    if usage is None:
-        return 1
-    total = getattr(usage, "total_tokens", None)
-    if total is not None:
-        return int(total)
-    prompt = getattr(usage, "prompt_tokens", None) or 0
-    completion_tokens = getattr(usage, "completion_tokens", None) or 0
-    n = int(prompt) + int(completion_tokens)
-    return n if n > 0 else 1
-
-
 def call_llm(llm_model: LlmModel, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
     """
     Call the LLM configured on ``llm_model`` via litellm.
 
-    For ``system_free`` configs, enforces quota/expiry before the call and
-    increments ``quota_used`` by reported total tokens after a successful response.
+    For ``system_free`` configs, enforces expiry before the call. Request quota
+    is enforced at the AgentRun level so tool-heavy rounds still count once.
 
     Returns the litellm completion response object.
     """
     if not llm_model.is_active:
         raise InactiveLlmModelError(f"LlmModel id={llm_model.pk} is not active.")
 
-    # Refresh quota-related fields from DB (short read, no lock during HTTP).
+    # Refresh availability-related fields from DB (short read, no lock during HTTP).
     llm_model.refresh_from_db(
-        fields=["quota", "quota_used", "quota_expires_at", "is_active"],
+        fields=["quota_expires_at", "is_active"],
     )
-    if llm_model.is_quota_exceeded:
+    if not llm_model.is_active:
+        raise InactiveLlmModelError(f"LlmModel id={llm_model.pk} is not active.")
+    if (
+        llm_model.quota_expires_at is not None
+        and timezone.now() > llm_model.quota_expires_at
+    ):
         raise QuotaExceededError(
             f"LlmModel id={llm_model.pk} quota expired or exhausted.",
         )
@@ -100,12 +91,5 @@ def call_llm(llm_model: LlmModel, messages: list[dict[str, Any]], **kwargs: Any)
         api_key=api_key,
         **kwargs,
     )
-
-    if llm_model.model_key == SYSTEM_FREE_MODEL_KEY:
-        delta = _total_tokens_from_response(response)
-        LlmModel.objects.filter(pk=llm_model.pk).update(
-            quota_used=F("quota_used") + delta,
-            updated_at=timezone.now(),
-        )
 
     return response

@@ -45,7 +45,7 @@ def _user(email: str) -> User:
 
 
 @pytest.mark.django_db
-def test_usage_summary_redacts_models_and_reports_quota_and_token_totals(client):
+def test_usage_summary_redacts_models_and_reports_request_quota_and_byo_token_totals(client):
     token = _register_and_token(client, "usage-summary@example.com")
     user = _user("usage-summary@example.com")
     system_model = LlmModel.objects.get(user=user, model_key=SYSTEM_FREE_MODEL_KEY)
@@ -68,13 +68,52 @@ def test_usage_summary_redacts_models_and_reports_quota_and_token_totals(client)
         user=user,
         llm_model=system_model,
         status=AgentRunStatus.COMPLETED,
+        started_at=timezone.now(),
+        completed_at=timezone.now(),
+    )
+    old_system_run = AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=system_model,
+        status=AgentRunStatus.COMPLETED,
+        started_at=timezone.now() - timezone.timedelta(days=40),
+        completed_at=timezone.now() - timezone.timedelta(days=40),
+    )
+    AgentRun.objects.filter(pk=old_system_run.pk).update(
+        created_at=timezone.now() - timezone.timedelta(days=40),
     )
     AgentRun.objects.create(
         channel=channel,
         conversation=conversation,
         user=user,
-        llm_model=byo_model,
+        llm_model=system_model,
         status=AgentRunStatus.FAILED,
+        started_at=timezone.now(),
+        completed_at=timezone.now(),
+    )
+    AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=system_model,
+        status=AgentRunStatus.PENDING,
+    )
+    AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=system_model,
+        status=AgentRunStatus.CANCELLED,
+    )
+    byo_run = AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=byo_model,
+        status=AgentRunStatus.COMPLETED,
+        started_at=timezone.now(),
+        completed_at=timezone.now(),
     )
     MessageLog.objects.create(
         agent_run=completed_run,
@@ -85,27 +124,90 @@ def test_usage_summary_redacts_models_and_reports_quota_and_token_totals(client)
         input_tokens=11,
         output_tokens=7,
     )
+    MessageLog.objects.create(
+        agent_run=byo_run,
+        conversation=conversation,
+        channel=channel,
+        actor=MessageActor.ASSISTANT,
+        content="BYO done",
+        input_tokens=13,
+        output_tokens=5,
+    )
+    old_byo_run = AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=byo_model,
+        status=AgentRunStatus.COMPLETED,
+    )
+    AgentRun.objects.filter(pk=old_byo_run.pk).update(
+        created_at=timezone.now() - timezone.timedelta(days=31),
+    )
+    MessageLog.objects.create(
+        agent_run=old_byo_run,
+        conversation=conversation,
+        channel=channel,
+        actor=MessageActor.ASSISTANT,
+        content="Old BYO done",
+        input_tokens=100,
+        output_tokens=100,
+    )
 
     response = client.get(USAGE_SUMMARY_URL, **_auth(token))
 
     assert response.status_code == 200
     data = response.json()
     assert data["system_model"]["quota"] == 100
-    assert data["system_model"]["quota_used"] == 35
-    assert data["system_model"]["quota_remaining"] == 65
+    assert data["system_model"]["quota_used"] == 2
+    assert data["system_model"]["quota_remaining"] == 98
     assert data["system_model"]["is_available"] is True
-    assert data["totals"]["input_tokens"] == 11
-    assert data["totals"]["output_tokens"] == 7
+    assert data["totals"]["input_tokens"] == 13
+    assert data["totals"]["output_tokens"] == 5
     assert data["totals"]["total_tokens"] == 18
-    assert data["totals"]["recent_run_count"] == 2
+    assert data["totals"]["recent_run_count"] == 5
     assert data["totals"]["failed_run_count"] == 1
     models = {row["model_key"]: row for row in data["models"]}
     assert models[SYSTEM_FREE_MODEL_KEY]["has_api_key"] is False
+    assert models[SYSTEM_FREE_MODEL_KEY]["quota_used"] == 2
+    assert models[SYSTEM_FREE_MODEL_KEY]["quota_remaining"] == 98
     assert models["deepseek/deepseek-chat"]["has_api_key"] is True
     assert "api_key" not in models["deepseek/deepseek-chat"]
     assert SYSTEM_FREE_MODEL_KEY not in [
         option["model_key"] for option in data["supported_models"]
     ]
+
+
+@pytest.mark.django_db
+def test_usage_summary_uses_settings_quota_when_system_model_quota_is_null(client, settings):
+    settings.SYSTEM_FREE_MONTHLY_REQUEST_QUOTA = 50
+    token = _register_and_token(client, "usage-settings-quota@example.com")
+    user = _user("usage-settings-quota@example.com")
+    system_model = LlmModel.objects.get(user=user, model_key=SYSTEM_FREE_MODEL_KEY)
+    system_model.quota = None
+    system_model.save(update_fields=["quota", "updated_at"])
+    channel = get_or_create_default_web_channel(user)
+    conversation = Conversation.objects.create(channel=channel, title="Settings quota")
+
+    AgentRun.objects.create(
+        channel=channel,
+        conversation=conversation,
+        user=user,
+        llm_model=system_model,
+        status=AgentRunStatus.COMPLETED,
+        started_at=timezone.now(),
+        completed_at=timezone.now(),
+    )
+
+    response = client.get(USAGE_SUMMARY_URL, **_auth(token))
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["system_model"]["quota"] == 50
+    assert data["system_model"]["quota_used"] == 1
+    assert data["system_model"]["quota_remaining"] == 49
+    models = {row["model_key"]: row for row in data["models"]}
+    assert models[SYSTEM_FREE_MODEL_KEY]["quota"] == 50
+    assert models[SYSTEM_FREE_MODEL_KEY]["quota_remaining"] == 49
 
 
 @pytest.mark.django_db
@@ -250,4 +352,3 @@ def test_delete_usage_model_rejects_system_active_and_cross_user_models(client):
     assert cross_user_delete.status_code == 404
     assert inactive_delete.status_code == 204
     assert LlmModel.objects.filter(pk=inactive_model.pk).exists() is False
-

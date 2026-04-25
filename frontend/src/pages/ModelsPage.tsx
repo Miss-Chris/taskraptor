@@ -24,11 +24,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { clearToken } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import {
   formatTokenCount,
-  formatUsageDate,
   type SupportedModelOption,
   type UsageLlmModel,
   type UsageModelCreateInput,
@@ -77,11 +77,22 @@ function ModelSkeleton() {
   )
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function TokenSummary({
+  label,
+  value,
+  detail,
+}: {
+  label: string
+  value: string
+  detail?: string
+}) {
   return (
-    <div className="rounded-lg border border-border bg-background p-3">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
+    <div className="rounded-lg border border-border bg-background p-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
+      {detail ? (
+        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      ) : null}
     </div>
   )
 }
@@ -97,9 +108,11 @@ function StatusPill({
     <span
       className={cn(
         "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-        tone === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
-        tone === "danger" && "border-destructive/30 bg-destructive/10 text-destructive",
-        tone === "neutral" && "border-border bg-muted text-muted-foreground",
+        tone === "success" &&
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
+        tone === "danger" &&
+          "border-destructive/30 bg-destructive/10 text-destructive",
+        tone === "neutral" && "border-border bg-muted text-muted-foreground"
       )}
     >
       {children}
@@ -123,17 +136,25 @@ function ModelDialog({
   supportedModels: SupportedModelOption[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (data: UsageModelCreateInput | UsageModelUpdateInput) => Promise<void>
+  onSubmit: (
+    data: UsageModelCreateInput | UsageModelUpdateInput
+  ) => Promise<void>
   isSubmitting: boolean
 }) {
   const firstOption = supportedModels[0]?.model_key ?? ""
   const isEdit = state.mode === "edit"
-  const [modelKey, setModelKey] = useState(isEdit ? state.model.model_key : firstOption)
+  const [modelKey, setModelKey] = useState(
+    isEdit ? state.model.model_key : firstOption
+  )
   const [apiKey, setApiKey] = useState("")
   const [contextLimit, setContextLimit] = useState(
-    isEdit ? String(state.model.context_message_limit) : String(DEFAULT_CONTEXT_LIMIT),
+    isEdit
+      ? String(state.model.context_message_limit)
+      : String(DEFAULT_CONTEXT_LIMIT)
   )
-  const [activate, setActivate] = useState(isEdit ? state.model.is_active : true)
+  const [activate, setActivate] = useState(
+    isEdit ? state.model.is_active : true
+  )
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -141,7 +162,11 @@ function ModelDialog({
     setError(null)
 
     const parsedContextLimit = Number(contextLimit)
-    if (!Number.isInteger(parsedContextLimit) || parsedContextLimit < 1 || parsedContextLimit > 1024) {
+    if (
+      !Number.isInteger(parsedContextLimit) ||
+      parsedContextLimit < 1 ||
+      parsedContextLimit > 1024
+    ) {
       setError("Context message limit must be between 1 and 1024.")
       return
     }
@@ -171,7 +196,12 @@ function ModelDialog({
       }
       onOpenChange(false)
     } catch (err) {
-      setError(getErrorMessage(err, isEdit ? "Failed to update model" : "Failed to create model"))
+      setError(
+        getErrorMessage(
+          err,
+          isEdit ? "Failed to update model" : "Failed to create model"
+        )
+      )
     }
   }
 
@@ -182,7 +212,9 @@ function ModelDialog({
           <DialogHeader>
             <DialogTitle>{isEdit ? "Edit model" : "Add model"}</DialogTitle>
             <DialogDescription>
-              {isEdit ? "Update the API key or context limit for this model." : "Add a user-provided model key."}
+              {isEdit
+                ? "Update the API key or context limit for this model."
+                : "Add a user-provided model key."}
             </DialogDescription>
           </DialogHeader>
 
@@ -190,13 +222,17 @@ function ModelDialog({
             <div className="grid gap-2">
               <Label htmlFor="model-key">Model</Label>
               {isEdit ? (
-                <Input id="model-key" value={state.model.display_name} disabled />
+                <Input
+                  id="model-key"
+                  value={state.model.display_name}
+                  disabled
+                />
               ) : (
                 <select
                   id="model-key"
                   value={modelKey}
                   onChange={(event) => setModelKey(event.target.value)}
-                  className="border-input bg-input/50 h-9 w-full rounded-3xl border px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                  className="h-9 w-full rounded-3xl border border-input bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                   disabled={supportedModels.length === 0}
                 >
                   {supportedModels.map((option) => (
@@ -214,7 +250,11 @@ function ModelDialog({
                 id="api-key"
                 type="password"
                 value={apiKey}
-                placeholder={isEdit ? "Leave blank to keep the current key" : "Provider API key"}
+                placeholder={
+                  isEdit
+                    ? "Leave blank to keep the current key"
+                    : "Provider API key"
+                }
                 onChange={(event) => setApiKey(event.target.value)}
                 autoComplete="off"
               />
@@ -236,14 +276,20 @@ function ModelDialog({
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
                 <div>
                   <Label htmlFor="activate-model">Activate immediately</Label>
-                  <p className="text-muted-foreground mt-1 text-xs">This will become the model used by chats.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This will become the model used by chats.
+                  </p>
                 </div>
-                <Switch id="activate-model" checked={activate} onCheckedChange={setActivate} />
+                <Switch
+                  id="activate-model"
+                  checked={activate}
+                  onCheckedChange={setActivate}
+                />
               </div>
             ) : null}
 
             {error ? (
-              <p className="text-destructive text-sm" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
@@ -255,7 +301,12 @@ function ModelDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && supportedModels.length === 0)}>
+            <Button
+              type="submit"
+              disabled={
+                isSubmitting || (!isEdit && supportedModels.length === 0)
+              }
+            >
               {isSubmitting ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
@@ -286,33 +337,59 @@ function ModelRow({
     <div className="grid gap-4 p-4 md:grid-cols-[1fr_auto] md:items-start">
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="bg-muted flex size-9 items-center justify-center rounded-lg">
-            {model.is_system ? <IconCpu className="text-muted-foreground size-4" /> : <IconKey className="text-muted-foreground size-4" />}
+          <div className="flex size-9 items-center justify-center rounded-lg bg-muted">
+            {model.is_system ? (
+              <IconCpu className="size-4 text-muted-foreground" />
+            ) : (
+              <IconKey className="size-4 text-muted-foreground" />
+            )}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{model.display_name}</h2>
-            <p className="text-muted-foreground truncate font-mono text-xs">{model.model_key}</p>
+            <h2 className="truncate text-sm font-semibold">
+              {model.display_name}
+            </h2>
+            <p className="truncate font-mono text-xs text-muted-foreground">
+              {model.model_key}
+            </p>
           </div>
-          {model.is_active ? <StatusPill tone="success">Active</StatusPill> : null}
-          {!model.is_available ? <StatusPill tone="danger">Unavailable</StatusPill> : null}
+          {model.is_active ? (
+            <StatusPill tone="success">Active</StatusPill>
+          ) : null}
+          {model.is_active && !model.is_available ? (
+            <StatusPill tone="danger">Unavailable</StatusPill>
+          ) : null}
         </div>
 
         <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="text-muted-foreground">Provider</dt>
-            <dd className="mt-1 font-medium">{providerLabel(model.provider)}</dd>
+            <dd className="mt-1 font-medium">
+              {providerLabel(model.provider)}
+            </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">API key</dt>
-            <dd className="mt-1 font-medium">{model.is_system ? "Server-managed" : model.has_api_key ? "Saved" : "Missing"}</dd>
+            <dt className="text-muted-foreground">
+              {model.is_system ? "Cost" : "API key"}
+            </dt>
+            <dd className="mt-1 font-medium">
+              {model.is_system
+                ? "Free of charge"
+                : model.has_api_key
+                  ? "Saved"
+                  : "Missing"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Usage tracking</dt>
+            <dd className="mt-1 font-medium">
+              {model.is_system ? "Requests" : "Tokens"}
+            </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Context limit</dt>
-            <dd className="mt-1 font-medium">{model.context_message_limit} messages</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Updated</dt>
-            <dd className="mt-1 font-medium">{formatUsageDate(model.updated_at)}</dd>
+            <dd className="mt-1 font-medium">
+              {model.context_message_limit} messages
+            </dd>
           </div>
         </dl>
 
@@ -322,28 +399,51 @@ function ModelRow({
               quota={model.quota}
               quotaUsed={model.quota_used}
               quotaRemaining={model.quota_remaining}
-              isAvailable={model.is_available}
+              isAvailable={model.is_active ? model.is_available : true}
+              unitSingular="request"
+              unitPlural="requests"
             />
-            <p className="text-muted-foreground mt-2 text-xs">
-              {model.quota_expires_at ? `Resets or expires ${formatDateTime(model.quota_expires_at)}.` : "No reset date is set."}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {model.quota_expires_at
+                ? `Resets or expires ${formatDateTime(model.quota_expires_at)}.`
+                : "No reset date is set."}
             </p>
           </div>
-        ) : null}
+        ) : (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Token totals are tracked for provider-key models and shown in the
+            BYO key summary.
+          </p>
+        )}
 
         {model.is_active && !model.is_system ? (
-          <p className="text-muted-foreground mt-3 text-xs">Activate another model before deleting this one.</p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Activate another model before deleting this one.
+          </p>
         ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2 md:justify-end">
         {canActivate ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onActivate(model)} disabled={isMutating}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onActivate(model)}
+            disabled={isMutating}
+          >
             <IconCheck />
             Activate
           </Button>
         ) : null}
         {canEdit ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => onEdit(model)} disabled={isMutating}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(model)}
+            disabled={isMutating}
+          >
             <IconSettings />
             Edit
           </Button>
@@ -355,7 +455,11 @@ function ModelRow({
             size="sm"
             onClick={() => onDelete(model)}
             disabled={!canDelete || isMutating}
-            title={!canDelete ? "Activate another model before deleting this one." : undefined}
+            title={
+              !canDelete
+                ? "Activate another model before deleting this one."
+                : undefined
+            }
           >
             <IconTrash />
             Delete
@@ -375,10 +479,15 @@ export function ModelsPage() {
   const deleteMutation = useDeleteLlmModelMutation()
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogState, setDialogState] = useState<ModelDialogState>({ mode: "create", model: null })
+  const [dialogState, setDialogState] = useState<ModelDialogState>({
+    mode: "create",
+    model: null,
+  })
   const [deleteTarget, setDeleteTarget] = useState<UsageLlmModel | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  useDocumentTitle("Models")
 
   useEffect(() => {
     const err = usageQuery.error
@@ -390,10 +499,23 @@ export function ModelsPage() {
 
   const summary = usageQuery.data
   const models = useMemo(() => summary?.models ?? [], [summary?.models])
-  const activeModel = useMemo(() => models.find((model) => model.is_active) ?? null, [models])
-  const activeSystemModel = activeModel?.is_system ? activeModel : null
+  const activeModel = useMemo(
+    () => models.find((model) => model.is_active) ?? null,
+    [models]
+  )
+  const systemModel = useMemo(
+    () => models.find((model) => model.is_system) ?? null,
+    [models]
+  )
+  const byoModels = useMemo(
+    () => models.filter((model) => !model.is_system),
+    [models]
+  )
   const isMutating =
-    createMutation.isPending || updateMutation.isPending || activateMutation.isPending || deleteMutation.isPending
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    activateMutation.isPending ||
+    deleteMutation.isPending
 
   function handleNewModel() {
     setDialogState({ mode: "create", model: null })
@@ -405,7 +527,9 @@ export function ModelsPage() {
     setDialogOpen(true)
   }
 
-  async function handleSubmitModel(data: UsageModelCreateInput | UsageModelUpdateInput) {
+  async function handleSubmitModel(
+    data: UsageModelCreateInput | UsageModelUpdateInput
+  ) {
     if (dialogState.mode === "edit") {
       await updateMutation.mutateAsync({
         params: { path: { model_id: dialogState.model.id } },
@@ -452,7 +576,7 @@ export function ModelsPage() {
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Models</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="mt-1 text-sm text-muted-foreground">
             {usageQuery.isLoading
               ? "Loading model settings..."
               : activeModel
@@ -460,62 +584,104 @@ export function ModelsPage() {
                 : "No active model found."}
           </p>
         </div>
-        <Button type="button" onClick={handleNewModel} disabled={usageQuery.isLoading}>
+        <Button
+          type="button"
+          onClick={handleNewModel}
+          disabled={usageQuery.isLoading}
+        >
           <IconPlus />
           Add model
         </Button>
       </header>
 
       {usageQuery.isError ? (
-        <p className="text-destructive text-sm">Could not load model usage.</p>
+        <p className="text-sm text-destructive">Could not load model usage.</p>
       ) : (
         <>
-          <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)]">
+          <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2">
-                <IconCpu className="text-muted-foreground size-4" />
-                <h2 className="text-sm font-semibold">Free system usage</h2>
+                <IconCpu className="size-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">System model</h2>
               </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Provided free of charge for evaluation and regular use.
+                Availability is shown as requests, not tokens.
+              </p>
               {usageQuery.isLoading ? (
                 <div className="mt-4 space-y-3">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-2 w-full" />
                   <Skeleton className="h-4 w-56" />
                 </div>
-              ) : activeSystemModel ? (
+              ) : systemModel ? (
                 <div className="mt-4">
                   <UsageMeter
-                    quota={activeSystemModel.quota}
-                    quotaUsed={activeSystemModel.quota_used}
-                    quotaRemaining={activeSystemModel.quota_remaining}
-                    isAvailable={activeSystemModel.is_available}
+                    quota={systemModel.quota}
+                    quotaUsed={systemModel.quota_used}
+                    quotaRemaining={systemModel.quota_remaining}
+                    isAvailable={
+                      systemModel.is_active ? systemModel.is_available : true
+                    }
+                    unitSingular="request"
+                    unitPlural="requests"
                   />
-                  <p className="text-muted-foreground mt-2 text-xs">
-                    {activeSystemModel.quota_expires_at
-                      ? `Resets or expires ${formatDateTime(activeSystemModel.quota_expires_at)}.`
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {systemModel.quota_expires_at
+                      ? `Resets or expires ${formatDateTime(systemModel.quota_expires_at)}.`
                       : "No reset date is set."}
                   </p>
                 </div>
               ) : (
-                <p className="text-muted-foreground mt-4 text-sm">A user-provided model is active.</p>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  The system model has not been created for this account.
+                </p>
               )}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <StatTile label="Total tokens" value={formatTokenCount(summary?.totals.total_tokens)} />
-              <StatTile label="Input tokens" value={formatTokenCount(summary?.totals.input_tokens)} />
-              <StatTile label="Output tokens" value={formatTokenCount(summary?.totals.output_tokens)} />
-              <StatTile label="Recent runs" value={formatTokenCount(summary?.totals.recent_run_count)} />
-              <StatTile label="Failed runs" value={formatTokenCount(summary?.totals.failed_run_count)} />
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center gap-2">
+                <IconKey className="size-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">Bring your own key</h2>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Connect DeepSeek or Anthropic for additional model
+                functionality. Token totals are shown only for chats handled by
+                your saved provider keys.
+              </p>
+
+              {usageQuery.isLoading ? (
+                <div className="mt-4 space-y-3">
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : byoModels.length > 0 ? (
+                <div className="mt-4">
+                  <TokenSummary
+                    label="Provider-key tokens"
+                    value={formatTokenCount(summary?.totals.total_tokens)}
+                    detail={`${formatTokenCount(summary?.totals.input_tokens)} input / ${formatTokenCount(summary?.totals.output_tokens)} output${
+                      summary?.totals.recent_since
+                        ? ` since ${formatDateTime(summary.totals.recent_since)}`
+                        : ""
+                    }`}
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg border border-dashed border-border p-4">
+                  <p className="text-sm font-medium">
+                    No provider key connected
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Add a key when you want provider-specific models and token
+                    visibility.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
 
-          {summary?.totals.recent_since ? (
-            <p className="text-muted-foreground text-xs">Usage totals since {formatDateTime(summary.totals.recent_since)}.</p>
-          ) : null}
-
           {actionError ? (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-sm text-destructive" role="alert">
               {actionError}
             </p>
           ) : null}
@@ -537,12 +703,14 @@ export function ModelsPage() {
             </div>
           ) : (
             <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
-              <div className="bg-muted flex size-12 items-center justify-center rounded-full">
-                <IconCpu className="text-muted-foreground size-6" />
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <IconCpu className="size-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-sm font-medium">No models available</p>
-                <p className="text-muted-foreground mt-1 text-sm">Add a model to start using TaskRaptor.</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add a model to start using TaskRaptor.
+                </p>
               </div>
               <Button type="button" onClick={handleNewModel}>
                 <IconPlus />
@@ -585,17 +753,26 @@ export function ModelsPage() {
             </DialogDescription>
           </DialogHeader>
           {deleteError ? (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-sm text-destructive" role="alert">
               {deleteError}
             </p>
           ) : null}
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="outline" disabled={deleteMutation.isPending}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleteMutation.isPending}
+              >
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="button" variant="destructive" onClick={handleConfirmDelete} disabled={deleteMutation.isPending}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteMutation.isPending}
+            >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>

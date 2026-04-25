@@ -4,7 +4,14 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { TaskStatusBadge } from "@/components/tasks/TaskStatusBadge"
 import { TaskTag } from "@/components/tasks/TaskTag"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { clearToken } from "@/lib/auth"
 import { type Task } from "@/lib/tasks"
 import { useTaskQuery } from "@/queries/tasks"
@@ -25,16 +32,21 @@ export function TaskDetailPage() {
   const taskQuery = useTaskQuery(taskId, { enabled: Boolean(taskId) })
   const task: Task | null = taskQuery.data ?? null
   const loading = Boolean(taskId) && taskQuery.isLoading
-  const error =
-    !taskId
-      ? "Missing task id"
-      : taskQuery.isError
-        ? taskQuery.error instanceof Error
-          ? taskQuery.error.message === "NOT_FOUND"
-            ? "Task not found."
-            : taskQuery.error.message
-          : "Failed to load task"
-        : null
+  const error = !taskId
+    ? "Missing task id"
+    : taskQuery.isError
+      ? taskQuery.error instanceof Error
+        ? taskQuery.error.message === "NOT_FOUND"
+          ? "Task not found."
+          : taskQuery.error.message
+        : "Failed to load task"
+      : null
+
+  useDocumentTitle(
+    loading
+      ? "Loading task"
+      : task?.name || (error === "Task not found." ? "Task not found" : "Task")
+  )
 
   useEffect(() => {
     const err = taskQuery.error
@@ -47,7 +59,7 @@ export function TaskDetailPage() {
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-4xl">
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -55,7 +67,7 @@ export function TaskDetailPage() {
   if (error || !task) {
     return (
       <div className="mx-auto w-full max-w-4xl space-y-4">
-        <p className="text-destructive text-sm" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {error ?? "Could not load task."}
         </p>
         <Button type="button" variant="outline" asChild>
@@ -114,7 +126,7 @@ export function TaskDetailPage() {
           </dl>
 
           <div>
-            <h3 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+            <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Tags
             </h3>
             {task.tags.length > 0 ? (
@@ -128,9 +140,9 @@ export function TaskDetailPage() {
             )}
           </div>
 
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Changes from chat or the agent are not shown here yet; this view is read-only from the
-            API.
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Changes from chat or the agent are not shown here yet; this view is
+            read-only from the API.
           </p>
         </CardContent>
       </Card>

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { getToken, register, setToken } from "@/lib/auth"
 
 export function RegisterPage() {
@@ -21,6 +22,8 @@ export function RegisterPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useDocumentTitle("Create account")
 
   if (getToken()) {
     return <Navigate to="/" replace />
@@ -46,12 +49,14 @@ export function RegisterPage() {
       <Card>
         <CardHeader>
           <CardTitle>Create account</CardTitle>
-          <CardDescription>Sign up with your email and a password.</CardDescription>
+          <CardDescription>
+            Sign up with your email and a password.
+          </CardDescription>
         </CardHeader>
         <form onSubmit={onSubmit}>
           <CardContent className="flex flex-col gap-4">
             {error ? (
-              <p className="text-destructive text-sm" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {error}
               </p>
             ) : null}
@@ -85,9 +90,12 @@ export function RegisterPage() {
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? "Creating account…" : "Create account"}
             </Button>
-            <p className="text-muted-foreground text-center text-sm">
+            <p className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link to="/login" className="text-primary font-medium underline-offset-4 hover:underline">
+              <Link
+                to="/login"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
                 Log in
               </Link>
             </p>

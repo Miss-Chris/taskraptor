@@ -58,7 +58,7 @@ def test_register_creates_system_free_model(client):
     ).first()
     assert model is not None
     assert model.is_active is True
-    assert model.quota is None
+    assert model.quota == 50
 
 
 @pytest.mark.django_db

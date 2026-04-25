@@ -6,10 +6,17 @@ from typing import Callable
 
 from django.utils import timezone
 
-from agent.models import AgentRun, AgentRunStatus, LlmModel, MessageLog, get_or_create_system_model
+from agent.models import (
+    AgentRun,
+    AgentRunStatus,
+    LlmModel,
+    MessageLog,
+    get_or_create_system_model,
+)
+from agent.quota import QUOTA_EXCEEDED_MESSAGE, is_system_quota_exceeded
 from agent.prompts import build_system_prompt
 from agent.run import run_agent
-from agent.schemas import AgentResult
+from agent.schemas import AgentResult, NewMessage
 from agent.utils import history_from_message_logs
 from taskraptor.timezones import local_now_context
 from channels.models import Channel, Conversation
@@ -53,6 +60,18 @@ def _persist_messages(
         )
 
 
+def _quota_exceeded_result(message: str) -> AgentResult:
+    return AgentResult(
+        response_text=QUOTA_EXCEEDED_MESSAGE,
+        new_messages=[
+            NewMessage(actor="user", content=message),
+            NewMessage(actor="assistant", content=QUOTA_EXCEEDED_MESSAGE),
+        ],
+        error="quota_exceeded",
+        iterations=0,
+    )
+
+
 def handle_user_incoming(
     conversation: Conversation,
     message: str,
@@ -86,6 +105,24 @@ def handle_user_incoming(
         if llm_model is None:
             llm_model = get_or_create_system_model(channel.user)
 
+        if is_system_quota_exceeded(llm_model, channel.user):
+            agent_run = AgentRun.objects.create(
+                channel=channel,
+                conversation=conversation,
+                user_id=user_id,
+                llm_model=llm_model,
+                status=AgentRunStatus.FAILED,
+                error="quota_exceeded",
+                completed_at=timezone.now(),
+            )
+            result = _quota_exceeded_result(message)
+            _persist_messages(agent_run, conversation, channel, result)
+            touch_conversation(conversation.pk)
+            if deliver_on_error:
+                runtime_conv = get_conversation(channel.pk, conversation.pk)
+                runtime_conv.send_message(QUOTA_EXCEEDED_MESSAGE, agent_run=agent_run)
+            return result
+
         agent_run = AgentRun.objects.create(
             channel=channel,
             conversation=conversation,
@@ -96,6 +133,19 @@ def handle_user_incoming(
         )
     else:
         llm_model = agent_run.llm_model
+        if is_system_quota_exceeded(llm_model, channel.user):
+            agent_run.status = AgentRunStatus.FAILED
+            agent_run.error = "quota_exceeded"
+            agent_run.completed_at = timezone.now()
+            agent_run.save(update_fields=["status", "error", "completed_at"])
+            result = _quota_exceeded_result(message)
+            _persist_messages(agent_run, conversation, channel, result)
+            touch_conversation(conversation.pk)
+            if deliver_on_error:
+                runtime_conv = get_conversation(channel.pk, conversation.pk)
+                runtime_conv.send_message(QUOTA_EXCEEDED_MESSAGE, agent_run=agent_run)
+            return result
+
         agent_run.status = AgentRunStatus.RUNNING
         agent_run.started_at = agent_run.started_at or timezone.now()
         agent_run.save(update_fields=["status", "started_at"])

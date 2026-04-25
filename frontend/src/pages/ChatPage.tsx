@@ -4,6 +4,7 @@ import type { FormEvent, KeyboardEvent, ReactNode } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { clearToken } from "@/lib/auth"
 import {
   fetchChatMessagesAfter,
@@ -18,7 +19,11 @@ import {
   useSendChatMessageMutation,
   useStartChatConversationMutation,
 } from "@/queries/chat"
-import { IconAlertTriangle, IconMessagePlus, IconSend } from "@tabler/icons-react"
+import {
+  IconAlertTriangle,
+  IconMessagePlus,
+  IconSend,
+} from "@tabler/icons-react"
 
 const POLL_MS = 1500
 const INLINE_MARKDOWN_PATTERN = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g
@@ -27,7 +32,10 @@ function isActiveRun(run: ChatRun | null | undefined): run is ChatRun {
   return run?.status === "pending" || run?.status === "running"
 }
 
-function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+function mergeMessages(
+  current: ChatMessage[],
+  incoming: ChatMessage[]
+): ChatMessage[] {
   const seen = new Set(current.map((message) => message.id))
   const next = [...current]
   for (const message of incoming) {
@@ -67,7 +75,10 @@ function parseInlineMarkdown(text: string): ReactNode[] {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={index} className="bg-muted rounded px-1 py-0.5 font-mono text-[0.85em]">
+        <code
+          key={index}
+          className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]"
+        >
           {part.slice(1, -1)}
         </code>
       )
@@ -77,7 +88,10 @@ function parseInlineMarkdown(text: string): ReactNode[] {
       const label = linkMatch[1] ?? ""
       const href = linkMatch[2]
       if (!href) return part
-      const safeHref = href.startsWith("http://") || href.startsWith("https://") ? href : undefined
+      const safeHref =
+        href.startsWith("http://") || href.startsWith("https://")
+          ? href
+          : undefined
       return safeHref ? (
         <a
           key={index}
@@ -110,7 +124,7 @@ function MarkdownMessage({ content }: { content: string }) {
     blocks.push(
       <p key={`p-${blocks.length}`} className="whitespace-pre-wrap">
         {parseInlineMarkdown(text)}
-      </p>,
+      </p>
     )
     paragraph = []
   }
@@ -122,16 +136,19 @@ function MarkdownMessage({ content }: { content: string }) {
         {listItems.map((item, index) => (
           <li key={index}>{parseInlineMarkdown(item)}</li>
         ))}
-      </ul>,
+      </ul>
     )
     listItems = []
   }
 
   const flushCode = () => {
     blocks.push(
-      <pre key={`code-${blocks.length}`} className="bg-muted overflow-x-auto rounded-md border p-3 text-xs">
+      <pre
+        key={`code-${blocks.length}`}
+        className="overflow-x-auto rounded-md border bg-muted p-3 text-xs"
+      >
         <code>{codeLines.join("\n")}</code>
-      </pre>,
+      </pre>
     )
     codeLines = []
   }
@@ -167,11 +184,12 @@ function MarkdownMessage({ content }: { content: string }) {
       const marker = headingMatch[1] ?? ""
       const text = headingMatch[2] ?? ""
       const level = marker.length
-      const className = level === 1 ? "text-base font-semibold" : "text-sm font-semibold"
+      const className =
+        level === 1 ? "text-base font-semibold" : "text-sm font-semibold"
       blocks.push(
         <p key={`h-${blocks.length}`} className={className}>
           {parseInlineMarkdown(text)}
-        </p>,
+        </p>
       )
       continue
     }
@@ -186,7 +204,7 @@ function MarkdownMessage({ content }: { content: string }) {
           className="border-l-2 border-border pl-3 text-muted-foreground"
         >
           {parseInlineMarkdown(quoteMatch[1] ?? "")}
-        </blockquote>,
+        </blockquote>
       )
       continue
     }
@@ -212,25 +230,24 @@ function MarkdownMessage({ content }: { content: string }) {
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user"
   return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
+    >
       <article
         className={cn(
           "max-w-[min(44rem,85%)] rounded-lg border px-4 py-3 text-sm leading-relaxed shadow-sm",
           isUser
             ? "border-border bg-muted text-foreground"
-            : "border-border bg-card/70 text-card-foreground",
+            : "border-border bg-card/70 text-card-foreground"
         )}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          <p className="break-words whitespace-pre-wrap">{message.content}</p>
         ) : (
           <MarkdownMessage content={message.content} />
         )}
         <time
-          className={cn(
-            "mt-2 block text-[0.7rem]",
-            "text-muted-foreground",
-          )}
+          className={cn("mt-2 block text-[0.7rem]", "text-muted-foreground")}
         >
           {formatTime(message.created_at)}
         </time>
@@ -242,7 +259,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 export function ChatPage() {
   const navigate = useNavigate()
   const { conversationId } = useParams()
-  const [conversation, setConversation] = useState<ChatConversation | null>(null)
+  const [conversation, setConversation] = useState<ChatConversation | null>(
+    null
+  )
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [runs, setRuns] = useState<ChatRun[]>([])
   const [input, setInput] = useState("")
@@ -262,6 +281,16 @@ export function ChatPage() {
   const activeRun = isActiveRun(latestRun) ? latestRun : null
   const canSend = input.trim().length > 0 && !sending && !starting
 
+  useDocumentTitle(
+    loading
+      ? "Loading chat"
+      : notFound
+        ? "Conversation not found"
+        : conversationId
+          ? conversationTitle(conversation)
+          : "TaskRaptor chat"
+  )
+
   const handleAuthError = useCallback(
     (message: string) => {
       if (message === "SESSION_EXPIRED" || message === "Not authenticated") {
@@ -271,7 +300,7 @@ export function ChatPage() {
       }
       return false
     },
-    [navigate],
+    [navigate]
   )
 
   useEffect(() => {
@@ -295,14 +324,18 @@ export function ChatPage() {
     setConversation(conversationQuery.data.conversation)
     setMessages(conversationQuery.data.messages)
     setRuns(conversationQuery.data.runs)
-    const failedRun = conversationQuery.data.runs.find((run) => run.status === "failed" && run.error)
+    const failedRun = conversationQuery.data.runs.find(
+      (run) => run.status === "failed" && run.error
+    )
     setRunError(failedRun?.error ?? null)
   }, [conversationId, conversationQuery.data])
 
   useEffect(() => {
     if (!conversationId || !conversationQuery.error) return
     const message =
-      conversationQuery.error instanceof Error ? conversationQuery.error.message : "Failed to load conversation"
+      conversationQuery.error instanceof Error
+        ? conversationQuery.error.message
+        : "Failed to load conversation"
     if (handleAuthError(message)) return
     setConversation(null)
     setMessages([])
@@ -335,7 +368,9 @@ export function ChatPage() {
         const lastMessageId = messages[messages.length - 1]?.id
         const [nextRun, nextMessages] = await Promise.all([
           fetchChatRun(activeRun.id),
-          lastMessageId ? fetchChatMessagesAfter(conversationId, lastMessageId) : Promise.resolve(null),
+          lastMessageId
+            ? fetchChatMessagesAfter(conversationId, lastMessageId)
+            : Promise.resolve(null),
         ])
         if (cancelled) return
         setRuns((current) => mergeRun(current, nextRun))
@@ -343,7 +378,9 @@ export function ChatPage() {
           setRunError(nextRun.error)
         }
         if (nextMessages?.messages.length) {
-          setMessages((current) => mergeMessages(current, nextMessages.messages))
+          setMessages((current) =>
+            mergeMessages(current, nextMessages.messages)
+          )
           window.dispatchEvent(new Event("taskraptor:chat-updated"))
         }
         if (nextRun.status === "completed") {
@@ -417,7 +454,7 @@ export function ChatPage() {
   if (loading) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading chat...</p>
+        <p className="text-sm text-muted-foreground">Loading chat...</p>
       </div>
     )
   }
@@ -425,10 +462,12 @@ export function ChatPage() {
   if (notFound) {
     return (
       <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-col items-center justify-center gap-4 text-center">
-        <IconAlertTriangle className="text-muted-foreground size-8" />
+        <IconAlertTriangle className="size-8 text-muted-foreground" />
         <div className="space-y-2">
-          <h1 className="text-xl font-semibold tracking-tight">Conversation not found</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-xl font-semibold tracking-tight">
+            Conversation not found
+          </h1>
+          <p className="text-sm text-muted-foreground">
             This conversation is unavailable or belongs to another account.
           </p>
         </div>
@@ -442,14 +481,23 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-none flex-1 flex-col">
-      <header className="border-border flex shrink-0 items-start justify-between gap-4 border-b pb-4">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-semibold tracking-tight">
-            {conversationId ? conversationTitle(conversation) : "TaskRaptor chat"}
+            {conversationId
+              ? conversationTitle(conversation)
+              : "TaskRaptor chat"}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">{headerDescription}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {headerDescription}
+          </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => navigate("/")}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/")}
+        >
           <IconMessagePlus />
           New Chat
         </Button>
@@ -458,16 +506,18 @@ export function ChatPage() {
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain py-4">
         {messages.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-16 text-center">
-            <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
               Send the first message to start a conversation.
             </p>
           </div>
         ) : (
-          messages.map((message) => <MessageBubble key={message.id} message={message} />)
+          messages.map((message) => (
+            <MessageBubble key={message.id} message={message} />
+          ))
         )}
         {activeRun ? (
           <div className="flex justify-start">
-            <div className="border-border bg-muted text-muted-foreground rounded-lg border px-4 py-3 text-sm">
+            <div className="rounded-lg border border-border bg-muted px-4 py-3 text-sm text-muted-foreground">
               Thinking...
             </div>
           </div>
@@ -475,10 +525,15 @@ export function ChatPage() {
         <div ref={scrollRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-background shrink-0 border-t pt-4">
-        {error ? <p className="text-destructive mb-3 text-sm">{error}</p> : null}
+      <form
+        onSubmit={handleSubmit}
+        className="shrink-0 border-t bg-background pt-4"
+      >
+        {error ? (
+          <p className="mb-3 text-sm text-destructive">{error}</p>
+        ) : null}
         {runError ? (
-          <p className="text-destructive mb-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
+          <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {runError}
           </p>
         ) : null}
@@ -490,10 +545,15 @@ export function ChatPage() {
             onKeyDown={handleComposerKeyDown}
             rows={2}
             placeholder="Message TaskRaptor"
-            className="border-input bg-background focus-visible:ring-ring min-h-12 flex-1 resize-none rounded-lg border px-3 py-2 text-sm leading-relaxed outline-none transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed transition-[border-color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={sending || starting}
           />
-          <Button type="submit" size="icon" disabled={!canSend} aria-label="Send message">
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!canSend}
+            aria-label="Send message"
+          >
             <IconSend />
           </Button>
         </div>

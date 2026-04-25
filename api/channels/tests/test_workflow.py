@@ -13,7 +13,14 @@ from typing import Any
 import pytest
 from django.utils import timezone
 
-from agent.models import AgentRun, AgentRunStatus, MessageLog
+from agent.models import (
+    AgentRun,
+    AgentRunStatus,
+    LlmModel,
+    MessageLog,
+    SYSTEM_FREE_MODEL_KEY,
+)
+from agent.quota import QUOTA_EXCEEDED_MESSAGE, current_month_system_request_count
 from channels.models import Conversation
 from channels.runtime import DummyConversation
 from channels.services import get_conversation
@@ -174,6 +181,61 @@ def test_agent_run_marked_failed_on_script_exhausted(
     run = AgentRun.objects.filter(conversation=test_conversation).order_by("-created_at").first()
     assert run is not None
     assert run.status == AgentRunStatus.FAILED
+
+
+@pytest.mark.django_db
+def test_system_model_multi_tool_round_counts_as_one_request(
+    test_user,
+    test_channel,
+    test_conversation,
+):
+    system_model = LlmModel.objects.create(
+        user=test_user,
+        model_key=SYSTEM_FREE_MODEL_KEY,
+        is_active=True,
+    )
+    scripted = ScriptedLlm([
+        tool_call_response("create_task", {"name": "Buy milk"}),
+        tool_call_response("respond_to_user", {"message": "I've added Buy milk."}),
+    ])
+
+    result = handle_user_incoming(test_conversation, "Add milk", llm_callable=scripted)
+
+    assert result.error is None
+    assert scripted.call_count == 2
+    assert current_month_system_request_count(test_user, model=system_model) == 1
+
+
+@pytest.mark.django_db
+def test_system_model_quota_exhaustion_blocks_before_llm_call(
+    test_user,
+    test_channel,
+    test_conversation,
+):
+    system_model = LlmModel.objects.create(
+        user=test_user,
+        model_key=SYSTEM_FREE_MODEL_KEY,
+        quota=0,
+        is_active=True,
+    )
+
+    def unexpected_llm(*_args, **_kwargs):
+        raise AssertionError("LLM should not be called when system quota is exhausted")
+
+    result = handle_user_incoming(
+        test_conversation,
+        "Add milk",
+        llm_callable=unexpected_llm,
+    )
+
+    assert result.error == "quota_exceeded"
+    assert result.response_text == QUOTA_EXCEEDED_MESSAGE
+    assert current_month_system_request_count(test_user, model=system_model) == 0
+
+    run = AgentRun.objects.get(conversation=test_conversation)
+    assert run.status == AgentRunStatus.FAILED
+    assert run.started_at is None
+    assert run.error == "quota_exceeded"
 
 
 @pytest.mark.django_db

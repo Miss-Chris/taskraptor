@@ -21,6 +21,12 @@ from agent.models import (
     SYSTEM_FREE_MODEL_KEY,
     get_or_create_system_model,
 )
+from agent.quota import (
+    current_month_system_request_count,
+    effective_quota,
+    is_system_quota_available,
+    quota_remaining,
+)
 from agent.usage_schemas import (
     SupportedModelOptionOut,
     UsageLlmModelOut,
@@ -49,40 +55,44 @@ def _display_name_for_model_key(model_key: str) -> str:
     return f"{provider.title()} {name}".replace("-", " ")
 
 
-def _quota_remaining(model: LlmModel) -> int | None:
-    if model.quota is None:
-        return None
-    return max(model.quota - model.quota_used, 0)
-
-
-def _to_model_out(model: LlmModel) -> UsageLlmModelOut:
+def _to_model_out(model: LlmModel, *, system_quota_used: int) -> UsageLlmModelOut:
+    quota_used = (
+        system_quota_used
+        if model.model_key == SYSTEM_FREE_MODEL_KEY
+        else model.quota_used
+    )
+    is_available = (
+        is_system_quota_available(model, quota_used)
+        if model.model_key == SYSTEM_FREE_MODEL_KEY
+        else not model.is_quota_exceeded
+    )
     return UsageLlmModelOut(
         id=model.pk,
         model_key=model.model_key,
         provider=_provider_for_model_key(model.model_key),
         display_name=_display_name_for_model_key(model.model_key),
         has_api_key=bool((model.api_key or "").strip()),
-        quota=model.quota,
-        quota_used=model.quota_used,
-        quota_remaining=_quota_remaining(model),
+        quota=effective_quota(model),
+        quota_used=quota_used,
+        quota_remaining=quota_remaining(model, quota_used),
         quota_expires_at=model.quota_expires_at,
         context_message_limit=model.context_message_limit,
         is_active=model.is_active,
         is_system=model.model_key == SYSTEM_FREE_MODEL_KEY,
-        is_available=not model.is_quota_exceeded,
+        is_available=is_available,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
 
 
-def _to_system_quota_out(model: LlmModel) -> UsageSystemQuotaOut:
+def _to_system_quota_out(model: LlmModel, *, quota_used: int) -> UsageSystemQuotaOut:
     return UsageSystemQuotaOut(
         model_id=model.pk,
-        quota=model.quota,
-        quota_used=model.quota_used,
-        quota_remaining=_quota_remaining(model),
+        quota=effective_quota(model),
+        quota_used=quota_used,
+        quota_remaining=quota_remaining(model, quota_used),
         quota_expires_at=model.quota_expires_at,
-        is_available=not model.is_quota_exceeded,
+        is_available=is_system_quota_available(model, quota_used),
         is_active=model.is_active,
     )
 
@@ -111,7 +121,12 @@ def _error_detail(exc: ValidationError) -> str:
 
 def _usage_totals(user) -> UsageTotalsOut:
     recent_since = timezone.now() - timedelta(days=RECENT_USAGE_DAYS)
-    token_totals = MessageLog.objects.filter(agent_run__user=user).aggregate(
+    token_totals = MessageLog.objects.filter(
+        agent_run__user=user,
+        agent_run__created_at__gte=recent_since,
+    ).exclude(
+        agent_run__llm_model__model_key=SYSTEM_FREE_MODEL_KEY,
+    ).aggregate(
         input_tokens=Sum("input_tokens"),
         output_tokens=Sum("output_tokens"),
     )
@@ -175,13 +190,23 @@ def _validate_byo_model(model: LlmModel) -> str | None:
 @router.get("/summary", response={200: UsageSummaryOut, 401: ErrorOut})
 def usage_summary(request: AuthedHttpRequest):
     system_model = _ensure_system_model(request.auth)
+    system_quota_used = current_month_system_request_count(
+        request.auth,
+        model=system_model,
+    )
     models = list(_model_queryset(request.auth))
     return Status(
         200,
         UsageSummaryOut(
-            system_model=_to_system_quota_out(system_model),
+            system_model=_to_system_quota_out(
+                system_model,
+                quota_used=system_quota_used,
+            ),
             totals=_usage_totals(request.auth),
-            models=[_to_model_out(model) for model in models],
+            models=[
+                _to_model_out(model, system_quota_used=system_quota_used)
+                for model in models
+            ],
             supported_models=_supported_model_options(),
         ),
     )
@@ -207,7 +232,8 @@ def create_usage_model(request: AuthedHttpRequest, payload: UsageModelCreateIn):
     if payload.is_active:
         _set_only_active_model(request.auth, model)
         model.refresh_from_db()
-    return Status(201, _to_model_out(model))
+    system_quota_used = current_month_system_request_count(request.auth)
+    return Status(201, _to_model_out(model, system_quota_used=system_quota_used))
 
 
 @router.patch(
@@ -248,7 +274,8 @@ def update_usage_model(
     if should_activate:
         _set_only_active_model(request.auth, model)
     model.refresh_from_db()
-    return Status(200, _to_model_out(model))
+    system_quota_used = current_month_system_request_count(request.auth)
+    return Status(200, _to_model_out(model, system_quota_used=system_quota_used))
 
 
 @router.post(
@@ -268,7 +295,8 @@ def activate_usage_model(request: AuthedHttpRequest, model_id: UUID):
 
     _set_only_active_model(request.auth, model)
     model.refresh_from_db()
-    return Status(200, _to_model_out(model))
+    system_quota_used = current_month_system_request_count(request.auth)
+    return Status(200, _to_model_out(model, system_quota_used=system_quota_used))
 
 
 @router.delete(
