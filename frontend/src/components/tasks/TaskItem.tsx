@@ -21,14 +21,17 @@ function TaskItemContent({ task }: { task: Task }) {
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-col gap-1 text-right text-sm text-muted-foreground md:text-left">
-        <span>
-          Due:{" "}
-          <span className="text-foreground">
+      <div className="flex shrink-0 flex-col gap-1 text-right md:text-left">
+        <span className="text-xs text-muted-foreground">
+          Due{" "}
+          <span className="font-medium text-foreground">
             {formatTaskDue(task)}
           </span>
         </span>
-        <span className="text-xs">Priority {task.priority}</span>
+        <span className="text-xs text-muted-foreground">
+          Priority{" "}
+          <span className="font-medium text-foreground">{task.priority}</span>
+        </span>
       </div>
     </>
   )

@@ -346,7 +346,7 @@ function ModelRow({
             )}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
+            <h2 className="truncate text-section-title">
               {model.display_name}
             </h2>
             <p className="truncate font-mono text-xs text-muted-foreground">
@@ -577,7 +577,7 @@ export function ModelsPage() {
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Models</h1>
+          <h1 className="text-page-title">Models</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {usageQuery.isLoading
               ? "Loading model settings..."
@@ -604,7 +604,7 @@ export function ModelsPage() {
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2">
                 <IconCpu className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">System model</h2>
+                <h2 className="text-section-title">System model</h2>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 Provided free of charge for evaluation and regular use.
@@ -644,7 +644,7 @@ export function ModelsPage() {
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center gap-2">
                 <IconKey className="size-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Bring your own key</h2>
+                <h2 className="text-section-title">Bring your own key</h2>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 Connect DeepSeek or Anthropic for additional model

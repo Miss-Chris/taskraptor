@@ -240,7 +240,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-            <p className="text-muted-foreground px-3 pt-3 text-xs font-medium">Tags</p>
+            <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/45">Tags</p>
             <SidebarMenu className="mt-1">
               {visibleTagCounts.length > 0 ? (
                 visibleTagCounts.map((row) => {

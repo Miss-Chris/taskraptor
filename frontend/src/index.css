@@ -128,3 +128,32 @@
     @apply font-sans;
     }
 }
+
+@layer utilities {
+  /* Typography hierarchy — apply these semantic classes for consistent text treatment */
+  .text-page-title {
+    font-size: 1.25rem;    /* text-xl */
+    line-height: 1.75rem;
+    font-weight: 700;      /* bold */
+    letter-spacing: -0.025em; /* tracking-tight */
+  }
+  .text-section-title {
+    font-size: 0.875rem;   /* text-sm */
+    line-height: 1.25rem;
+    font-weight: 600;      /* semibold */
+  }
+  .text-card-title {
+    font-size: 0.875rem;   /* text-sm */
+    line-height: 1.25rem;
+    font-weight: 500;      /* medium */
+  }
+  .text-body {
+    font-size: 0.875rem;   /* text-sm */
+    line-height: 1.25rem;
+  }
+  .text-label {
+    font-size: 0.75rem;    /* text-xs */
+    line-height: 1rem;
+    color: var(--color-muted-foreground);
+  }
+}

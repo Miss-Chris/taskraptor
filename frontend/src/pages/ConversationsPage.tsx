@@ -58,9 +58,7 @@ export function ConversationsPage() {
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            All Conversations
-          </h1>
+          <h1 className="text-page-title">All Conversations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {conversationsQuery.data?.count ?? conversations.length} active
             chats

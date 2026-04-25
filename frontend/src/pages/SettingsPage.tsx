@@ -137,7 +137,7 @@ export function SettingsPage() {
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
+          <h1 className="text-page-title">Settings</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Manage your timezone and the instructions TaskRaptor should keep in
             mind.
@@ -156,7 +156,7 @@ export function SettingsPage() {
         <div className="grid gap-4">
           <section className="rounded-lg border border-border bg-card p-4">
             <div className="max-w-2xl">
-              <h2 className="text-sm font-semibold">Timezone</h2>
+              <h2 className="text-section-title">Timezone</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 Used when TaskRaptor schedules automations and interprets dates.
               </p>
@@ -184,7 +184,7 @@ export function SettingsPage() {
               className="max-w-2xl"
               onSubmit={handleSavePromptInstructions}
             >
-              <h2 className="text-sm font-semibold">
+              <h2 className="text-section-title">
                 Custom prompt instructions
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">

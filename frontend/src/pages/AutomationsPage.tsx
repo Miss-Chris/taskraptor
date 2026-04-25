@@ -138,7 +138,7 @@ export function AutomationsPage() {
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Automations</h1>
+          <h1 className="text-page-title">Automations</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {automationsQuery.data?.count ?? automations.length} scheduled
             automations

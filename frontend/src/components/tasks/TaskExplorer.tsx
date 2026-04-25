@@ -216,7 +216,7 @@ export function TaskExplorer({
       <section className="flex min-h-[24rem] flex-col overflow-hidden rounded-lg border border-border bg-card/40">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{title}</h2>
+            <h2 className="truncate text-base font-bold">{title}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {tasksLoading
                 ? "Loading tasks"
@@ -341,7 +341,7 @@ export function TaskExplorer({
 
                   <section>
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold">History</h3>
+                      <h3 className="text-section-title">History</h3>
                       {detailLoading ? (
                         <span className="text-xs text-muted-foreground">
                           Refreshing

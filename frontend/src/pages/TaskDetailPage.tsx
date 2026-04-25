@@ -90,7 +90,7 @@ export function TaskDetailPage() {
       <Card>
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <CardTitle className="text-xl">{task.name}</CardTitle>
+            <CardTitle className="text-xl font-bold">{task.name}</CardTitle>
             <TaskStatusBadge status={task.status} />
           </div>
           <CardDescription>Task id: {task.id}</CardDescription>
@@ -98,31 +98,31 @@ export function TaskDetailPage() {
         <CardContent className="space-y-6 text-sm">
           <dl className="grid gap-3 sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Priority</dt>
+              <dt className="text-label">Priority</dt>
               <dd className="font-medium">{task.priority}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Due type</dt>
+              <dt className="text-label">Due type</dt>
               <dd className="font-medium capitalize">{task.due_type}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Due at</dt>
+              <dt className="text-label">Due at</dt>
               <dd className="font-medium">{formatTaskDue(task)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Remind at</dt>
+              <dt className="text-label">Remind at</dt>
               <dd className="font-medium">{formatTs(task.remind_at)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Completed at</dt>
+              <dt className="text-label">Completed at</dt>
               <dd className="font-medium">{formatTs(task.completed_at)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Archived at</dt>
+              <dt className="text-label">Archived at</dt>
               <dd className="font-medium">{formatTs(task.archived_at)}</dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">Created at</dt>
+              <dt className="text-label">Created at</dt>
               <dd className="font-medium">{formatTs(task.created_at)}</dd>
             </div>
           </dl>
