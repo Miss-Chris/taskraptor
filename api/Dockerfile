@@ -22,6 +22,7 @@ RUN chmod +x init.sh && \
     adduser --system --ingroup taskraptor taskraptor && \
     chown -R taskraptor:taskraptor /app
 
+ENV HOME=/app
 EXPOSE 8000
 
 USER taskraptor
