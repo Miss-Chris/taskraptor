@@ -49,6 +49,8 @@ def _to_task_out(task: Task, user: User) -> TaskOut:
     return TaskOut(
         id=task.id,
         name=task.name,
+        description=task.description,
+        agent_notes=task.agent_notes,
         status=task.status,
         priority=task.priority,
         due_at=task.due_at,
@@ -214,6 +216,8 @@ def create_task_endpoint(request: AuthedHttpRequest, payload: TaskCreateIn):
         task = create_task(
             user_id=user.pk,
             name=name,
+            description=payload.description,
+            agent_notes=payload.agent_notes,
             status=payload.status or TaskStatus.PENDING,
             priority=payload.priority if payload.priority is not None else 0,
             due_at=due_at,
@@ -306,6 +310,8 @@ def update_task_endpoint(
             task,
             audit_actor_id=user.pk,
             name=name,
+            description=payload.description if "description" in fields else UNSET,
+            agent_notes=payload.agent_notes if "agent_notes" in fields else UNSET,
             status=payload.status if payload.status is not None else UNSET,
             priority=payload.priority if payload.priority is not None else UNSET,
             due_at=due_at,

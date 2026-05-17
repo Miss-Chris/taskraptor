@@ -12,6 +12,8 @@ DueTypeValue = Literal["date", "time"]
 class TaskOut(Schema):
     id: UUID
     name: str
+    description: str | None
+    agent_notes: str | None
     status: str
     priority: int
     due_at: datetime | None
@@ -36,6 +38,8 @@ class TaskListOut(Schema):
 
 class TaskCreateIn(Schema):
     name: str
+    description: str | None = None
+    agent_notes: str | None = None
     status: TaskStatusValue | None = None
     priority: int | None = None
     due_at: str | None = None
@@ -46,6 +50,8 @@ class TaskCreateIn(Schema):
 
 class TaskUpdateIn(Schema):
     name: str | None = None
+    description: str | None = None
+    agent_notes: str | None = None
     status: TaskStatusValue | None = None
     priority: int | None = None
     due_at: str | None = None

@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from django.db import connection
+from django.db.models import Q
 from django.utils import timezone
 from pydantic import BaseModel, Field, model_validator
 
@@ -48,6 +49,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "name": {"type": "string", "description": "Task title."},
+                    "description": {
+                        "type": "string",
+                        "description": "User-facing context or details for the task.",
+                    },
+                    "agent_notes": {
+                        "type": "string",
+                        "description": "Internal notes for future agent work on the task.",
+                    },
                     "status": {
                         "type": "string",
                         "enum": ["pending", "in_progress", "completed", "cancelled"],
@@ -93,6 +102,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "description": "UUID of the task to edit.",
                     },
                     "name": {"type": "string", "description": "New task title."},
+                    "description": {
+                        "type": "string",
+                        "description": "Replacement user-facing task description.",
+                    },
+                    "agent_notes": {
+                        "type": "string",
+                        "description": "Replacement internal notes for future agent work.",
+                    },
                     "status": {
                         "type": "string",
                         "enum": ["pending", "in_progress", "completed", "cancelled"],
@@ -220,7 +237,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     },
                     "search": {
                         "type": "string",
-                        "description": "Case-insensitive text search within task names.",
+                        "description": "Case-insensitive text search within task names and descriptions.",
                     },
                     "include_completed": {
                         "type": "boolean",
@@ -248,6 +265,8 @@ class RespondToUserArgs(BaseModel):
 
 class CreateTaskArgs(BaseModel):
     name: str
+    description: str | None = None
+    agent_notes: str | None = None
     status: TaskStatus = TaskStatus.PENDING
     priority: int = 0
     due_at: str | None = None
@@ -258,6 +277,8 @@ class CreateTaskArgs(BaseModel):
 class EditTaskArgs(BaseModel):
     task_id: UUID
     name: str | None = None
+    description: str | None = None
+    agent_notes: str | None = None
     status: TaskStatus | None = None
     priority: int | None = None
     due_at: str | None = None
@@ -335,6 +356,8 @@ def _tool_create_task(args: CreateTaskArgs, user_id: UUID) -> str:
     task = create_task(
         user_id=user_id,
         name=args.name,
+        description=args.description,
+        agent_notes=args.agent_notes,
         status=args.status,
         priority=args.priority,
         due_at=due_at,
@@ -366,6 +389,8 @@ def _tool_edit_task(args: EditTaskArgs, user_id: UUID) -> str:
         task,
         audit_actor_id=user_id,
         name=args.name if args.name is not None else UNSET,
+        description=args.description if "description" in args.model_fields_set else UNSET,
+        agent_notes=args.agent_notes if "agent_notes" in args.model_fields_set else UNSET,
         status=args.status if args.status is not None else UNSET,
         priority=args.priority if args.priority is not None else UNSET,
         due_at=due_at,
@@ -431,6 +456,8 @@ def _task_to_dict(task: Task, user_timezone: str) -> dict[str, Any]:
     return {
         "id": str(task.pk),
         "name": task.name,
+        "description": task.description,
+        "agent_notes": task.agent_notes,
         "status": task.status,
         "priority": task.priority,
         "due_at": task.due_at.isoformat() if task.due_at else None,
@@ -473,7 +500,8 @@ def _tool_query_tasks(args: QueryTasksArgs, user_id: UUID) -> str:
             qs = qs.filter(priority__lte=args.max_priority)
 
     if args.search is not None and args.search.strip():
-        qs = qs.filter(name__icontains=args.search.strip())
+        search = args.search.strip()
+        qs = qs.filter(Q(name__icontains=search) | Q(description__icontains=search))
 
     if args.tag is not None and args.tag.strip():
         tag = args.tag.strip()

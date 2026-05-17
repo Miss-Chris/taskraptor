@@ -1068,6 +1068,7 @@ export interface components {
             tags: string[];
             /** Remind At */
             remind_at: string | null;
+            /** Reminded At */
             reminded_at: string | null;
             /** Completed At */
             completed_at: string | null;
@@ -1170,6 +1171,10 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Description */
+            description: string | null;
+            /** Agent Notes */
+            agent_notes: string | null;
             /** Status */
             status: string;
             /** Priority */
@@ -1188,8 +1193,11 @@ export interface components {
             tags: string[];
             /** Remind At */
             remind_at: string | null;
+            /** Remind At Local */
             remind_at_local: string | null;
+            /** Remind Date Local */
             remind_date_local: string | null;
+            /** Reminded At */
             reminded_at: string | null;
             /** Completed At */
             completed_at: string | null;
@@ -1205,6 +1213,10 @@ export interface components {
         TaskCreateIn: {
             /** Name */
             name: string;
+            /** Description */
+            description?: string | null;
+            /** Agent Notes */
+            agent_notes?: string | null;
             /** Status */
             status?: ("pending" | "in_progress" | "completed" | "cancelled") | null;
             /** Priority */
@@ -1215,6 +1227,7 @@ export interface components {
             due_type?: ("date" | "time") | null;
             /** Tags */
             tags?: string[];
+            /** Remind At */
             remind_at?: string | null;
         };
         /** TaskAuditLogListOut */
@@ -1252,6 +1265,10 @@ export interface components {
         TaskUpdateIn: {
             /** Name */
             name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Agent Notes */
+            agent_notes?: string | null;
             /** Status */
             status?: ("pending" | "in_progress" | "completed" | "cancelled") | null;
             /** Priority */
@@ -1264,7 +1281,9 @@ export interface components {
             clear_due_at?: boolean | null;
             /** Tags */
             tags?: string[] | null;
+            /** Remind At */
             remind_at?: string | null;
+            /** Clear Remind At */
             clear_remind_at?: boolean | null;
         };
         /** SupportedModelOptionOut */

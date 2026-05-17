@@ -19,6 +19,8 @@ class TaskStatus(models.TextChoices):
 class AuditAction(models.TextChoices):
     STATUS_CHANGED = "status_changed", "Status changed"
     NAME_CHANGED = "name_changed", "Name changed"
+    DESCRIPTION_CHANGED = "description_changed", "Description changed"
+    AGENT_NOTES_CHANGED = "agent_notes_changed", "Agent notes changed"
     PRIORITY_CHANGED = "priority_changed", "Priority changed"
     TAGS_CHANGED = "tags_changed", "Tags changed"
     REMINDER_CHANGED = "reminder_changed", "Reminder changed"
@@ -66,6 +68,8 @@ class Task(models.Model):
         related_name="tasks",
     )
     name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    agent_notes = models.TextField(null=True, blank=True)
     status = models.CharField(
         max_length=32,
         choices=TaskStatus.choices,
@@ -108,7 +112,15 @@ class Task(models.Model):
             audit_actor_id = getattr(audit_actor, "pk", None)
         update_fields = kwargs.get("update_fields")
 
-        tracked = {"status", "name", "priority", "tags", "remind_at"}
+        tracked = {
+            "status",
+            "name",
+            "description",
+            "agent_notes",
+            "priority",
+            "tags",
+            "remind_at",
+        }
         if update_fields is not None:
             tracked &= set(update_fields)
 
@@ -116,7 +128,15 @@ class Task(models.Model):
         if self.pk and tracked:
             old_row = (
                 Task.objects.filter(pk=self.pk)
-                .values("status", "name", "priority", "tags", "remind_at")
+                .values(
+                    "status",
+                    "name",
+                    "description",
+                    "agent_notes",
+                    "priority",
+                    "tags",
+                    "remind_at",
+                )
                 .first()
             )
 
@@ -143,6 +163,26 @@ class Task(models.Model):
                     action=AuditAction.NAME_CHANGED,
                     old_value=old_row["name"],
                     new_value=self.name,
+                    actor_id=audit_actor_id,
+                )
+            )
+        if "description" in tracked and old_row["description"] != self.description:
+            logs.append(
+                TaskAuditLog(
+                    task=self,
+                    action=AuditAction.DESCRIPTION_CHANGED,
+                    old_value=old_row["description"],
+                    new_value=self.description,
+                    actor_id=audit_actor_id,
+                )
+            )
+        if "agent_notes" in tracked and old_row["agent_notes"] != self.agent_notes:
+            logs.append(
+                TaskAuditLog(
+                    task=self,
+                    action=AuditAction.AGENT_NOTES_CHANGED,
+                    old_value=old_row["agent_notes"],
+                    new_value=self.agent_notes,
                     actor_id=audit_actor_id,
                 )
             )

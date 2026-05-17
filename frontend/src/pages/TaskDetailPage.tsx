@@ -133,6 +133,19 @@ export function TaskDetailPage() {
 
           <div>
             <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Description
+            </h3>
+            {task.description ? (
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {task.description}
+              </p>
+            ) : (
+              <p className="text-muted-foreground">No description</p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Tags
             </h3>
             {task.tags.length > 0 ? (

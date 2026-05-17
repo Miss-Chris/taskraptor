@@ -36,6 +36,32 @@ def test_update_task_sets_and_clears_completed_at(test_user):
 
 
 @pytest.mark.django_db
+def test_update_task_audits_description_and_agent_notes(test_user):
+    task = create_task(
+        user_id=test_user.pk,
+        name="Write brief",
+        description="Initial detail",
+        agent_notes="Initial note",
+    )
+
+    update_task(
+        task,
+        description="Updated detail",
+        agent_notes="Updated note",
+        audit_actor_id=test_user.pk,
+    )
+
+    logs = {
+        log.action: log
+        for log in TaskAuditLog.objects.filter(task=task).order_by("created_at")
+    }
+    assert logs[AuditAction.DESCRIPTION_CHANGED].old_value == "Initial detail"
+    assert logs[AuditAction.DESCRIPTION_CHANGED].new_value == "Updated detail"
+    assert logs[AuditAction.AGENT_NOTES_CHANGED].old_value == "Initial note"
+    assert logs[AuditAction.AGENT_NOTES_CHANGED].new_value == "Updated note"
+
+
+@pytest.mark.django_db
 def test_task_service_normalizes_naive_due_at_in_user_timezone(test_user):
     test_user.timezone = "America/Toronto"
     test_user.save(update_fields=["timezone"])
@@ -138,6 +164,41 @@ def test_create_task_tool_interprets_naive_due_at_in_user_timezone(test_user):
     task = Task.objects.get(pk=result["task_id"])
     assert task.due_at == datetime(2026, 4, 10, 13, 30, tzinfo=UTC)
     assert task.due_type == DueType.TIME
+
+
+@pytest.mark.django_db
+def test_create_and_edit_task_tools_support_description_and_agent_notes(test_user):
+    created = json.loads(
+        execute_tool(
+            "create_task",
+            {
+                "name": "Prepare launch",
+                "description": "Coordinate release checklist",
+                "agent_notes": "Waiting on legal review",
+            },
+            test_user.pk,
+        )
+    )
+    task = Task.objects.get(pk=created["task_id"])
+    assert task.description == "Coordinate release checklist"
+    assert task.agent_notes == "Waiting on legal review"
+
+    edited = json.loads(
+        execute_tool(
+            "edit_task",
+            {
+                "task_id": task.pk,
+                "description": "Coordinate launch checklist",
+                "agent_notes": "Legal approved",
+            },
+            test_user.pk,
+        )
+    )
+    task.refresh_from_db()
+    assert edited["ok"] is True
+    assert edited["updated_fields"] == ["description", "agent_notes"]
+    assert task.description == "Coordinate launch checklist"
+    assert task.agent_notes == "Legal approved"
 
 
 @pytest.mark.django_db
@@ -255,6 +316,34 @@ def test_query_tasks_tool_filters_by_status_tag_priority_upcoming_and_search(tes
     assert result["ok"] is True
     assert result["count"] == 1
     assert result["tasks"][0]["name"] == "Pay invoice"
+
+
+@pytest.mark.django_db
+def test_query_tasks_tool_searches_descriptions_but_not_agent_notes(test_user):
+    visible = create_task(
+        user_id=test_user.pk,
+        name="Plain title",
+        description="Contains quarterly review",
+        agent_notes="Invisible needle",
+    )
+    create_task(
+        user_id=test_user.pk,
+        name="Another title",
+        description="No match here",
+        agent_notes="quarterly review hidden",
+    )
+
+    by_description = json.loads(
+        execute_tool("query_tasks", {"search": "quarterly review"}, test_user.pk)
+    )
+    by_agent_notes = json.loads(
+        execute_tool("query_tasks", {"search": "Invisible needle"}, test_user.pk)
+    )
+
+    assert [task["id"] for task in by_description["tasks"]] == [str(visible.pk)]
+    assert by_description["tasks"][0]["description"] == "Contains quarterly review"
+    assert by_description["tasks"][0]["agent_notes"] == "Invisible needle"
+    assert by_agent_notes["tasks"] == []
 
 
 @pytest.mark.django_db

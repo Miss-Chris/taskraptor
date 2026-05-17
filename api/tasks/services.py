@@ -54,6 +54,8 @@ def create_task(
     *,
     user_id: UUID,
     name: str,
+    description: str | None = None,
+    agent_notes: str | None = None,
     status: str = TaskStatus.PENDING,
     priority: int = 0,
     due_at: datetime | None = None,
@@ -73,6 +75,8 @@ def create_task(
     return Task.objects.create(
         user_id=user_id,
         name=name,
+        description=description,
+        agent_notes=agent_notes,
         status=status,
         priority=priority,
         due_at=due_at,
@@ -111,6 +115,8 @@ def update_task(
     *,
     audit_actor_id: UUID | None = None,
     name: Any = UNSET,
+    description: Any = UNSET,
+    agent_notes: Any = UNSET,
     status: Any = UNSET,
     priority: Any = UNSET,
     due_at: Any = UNSET,
@@ -130,6 +136,14 @@ def update_task(
     if name is not UNSET:
         task.name = name
         update_fields.append("name")
+
+    if description is not UNSET:
+        task.description = description
+        update_fields.append("description")
+
+    if agent_notes is not UNSET:
+        task.agent_notes = agent_notes
+        update_fields.append("agent_notes")
 
     if status is not UNSET:
         previous_status = task.status

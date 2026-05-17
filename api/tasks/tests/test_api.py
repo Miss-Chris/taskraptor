@@ -101,6 +101,8 @@ def test_create_task_success_with_due_date_normalization(client):
         LIST_URL,
         data={
             "name": "  File taxes  ",
+            "description": "Annual filing",
+            "agent_notes": "Ask for receipts",
             "priority": 3,
             "due_at": "2026-04-10",
             "tags": ["personal"],
@@ -112,6 +114,8 @@ def test_create_task_success_with_due_date_normalization(client):
     assert response.status_code == 201
     body = response.json()
     assert body["name"] == "File taxes"
+    assert body["description"] == "Annual filing"
+    assert body["agent_notes"] == "Ask for receipts"
     assert body["status"] == TaskStatus.PENDING
     assert body["priority"] == 3
     assert body["due_type"] == "date"
@@ -214,6 +218,8 @@ def test_update_task_success_audits_changes_and_sets_completed_at(client):
         f"/api/tasks/{task.pk}",
         data={
             "name": "  Renamed  ",
+            "description": "Customer-facing detail",
+            "agent_notes": "Internal follow-up",
             "status": TaskStatus.COMPLETED,
             "priority": 5,
             "tags": ["done"],
@@ -225,6 +231,8 @@ def test_update_task_success_audits_changes_and_sets_completed_at(client):
     assert response.status_code == 200
     body = response.json()
     assert body["name"] == "Renamed"
+    assert body["description"] == "Customer-facing detail"
+    assert body["agent_notes"] == "Internal follow-up"
     assert body["status"] == TaskStatus.COMPLETED
     assert body["priority"] == 5
     assert body["tags"] == ["done"]
@@ -235,6 +243,8 @@ def test_update_task_success_audits_changes_and_sets_completed_at(client):
     )
     assert actions == {
         AuditAction.NAME_CHANGED,
+        AuditAction.DESCRIPTION_CHANGED,
+        AuditAction.AGENT_NOTES_CHANGED,
         AuditAction.STATUS_CHANGED,
         AuditAction.PRIORITY_CHANGED,
         AuditAction.TAGS_CHANGED,
@@ -577,6 +587,30 @@ def test_get_task_audit_logs_success_ordered_newest_first(client):
     assert logs[0]["old_value"] == 1
     assert logs[0]["new_value"] == 3
     assert logs[0]["actor_id"] == str(user.pk)
+
+
+@pytest.mark.django_db
+def test_get_task_and_list_include_description_and_agent_notes(client):
+    from accounts.models import User
+
+    token = _register_and_token(client, "task-fields@example.com")
+    user = User.objects.get(email="task-fields@example.com")
+    task = create_task(
+        user_id=user.pk,
+        name="Detailed task",
+        description="Visible context",
+        agent_notes="Internal context",
+    )
+
+    detail = client.get(f"/api/tasks/{task.pk}", **_auth(token))
+    listing = client.get(LIST_URL, **_auth(token))
+
+    assert detail.status_code == 200
+    assert detail.json()["description"] == "Visible context"
+    assert detail.json()["agent_notes"] == "Internal context"
+    assert listing.status_code == 200
+    assert listing.json()["tasks"][0]["description"] == "Visible context"
+    assert listing.json()["tasks"][0]["agent_notes"] == "Internal context"
 
 
 @pytest.mark.django_db
