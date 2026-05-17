@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-TelegramWebhookAction = Literal["ignore", "join", "text"]
+TelegramWebhookAction = Literal["ignore", "join", "text", "attachment"]
 
 _JOIN_RE = re.compile(r"^\s*JOIN\s+([A-Za-z0-9]{6})\s*$", re.IGNORECASE)
 
@@ -17,6 +17,11 @@ class TelegramWebhookEvent:
     chat_id: str | None = None
     text: str = ""
     join_code: str | None = None
+    attachment_kind: str | None = None
+    file_id: str | None = None
+    file_name: str = ""
+    mime_type: str = ""
+    caption: str = ""
 
 
 IGNORE_EVENT = TelegramWebhookEvent(action="ignore")
@@ -51,6 +56,46 @@ def route_telegram_update(payload: Mapping[str, Any]) -> TelegramWebhookEvent:
     chat_id = chat.get("id")
     if chat_id is None:
         return IGNORE_EVENT
+
+    caption = message.get("caption")
+    normalized_caption = caption.strip() if isinstance(caption, str) else ""
+
+    photo = message.get("photo")
+    if isinstance(photo, list):
+        photo_sizes = [
+            item
+            for item in photo
+            if isinstance(item, Mapping) and isinstance(item.get("file_id"), str)
+        ]
+        if photo_sizes:
+            chosen = max(
+                photo_sizes,
+                key=lambda item: (
+                    item.get("file_size") or 0,
+                    item.get("width") or 0,
+                    item.get("height") or 0,
+                ),
+            )
+            return TelegramWebhookEvent(
+                action="attachment",
+                chat_id=str(chat_id),
+                attachment_kind="photo",
+                file_id=chosen["file_id"],
+                mime_type="image/jpeg",
+                caption=normalized_caption,
+            )
+
+    document = message.get("document")
+    if isinstance(document, Mapping) and isinstance(document.get("file_id"), str):
+        return TelegramWebhookEvent(
+            action="attachment",
+            chat_id=str(chat_id),
+            attachment_kind="document",
+            file_id=document["file_id"],
+            file_name=str(document.get("file_name") or ""),
+            mime_type=str(document.get("mime_type") or ""),
+            caption=normalized_caption,
+        )
 
     text = message.get("text")
     if not isinstance(text, str):

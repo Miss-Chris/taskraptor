@@ -50,6 +50,12 @@ def _resolve_api_key(llm_model: LlmModel) -> str:
             raise MissingApiKeyError("Anthropic API key is missing on this LlmModel.")
         return key
 
+    if provider == LlmProvider.OPENAI:
+        key = (llm_model.api_key or "").strip()
+        if not key:
+            raise MissingApiKeyError("OpenAI API key is missing on this LlmModel.")
+        return key
+
     key = (llm_model.api_key or "").strip()
     if not key:
         raise MissingApiKeyError(f"API key is missing for provider {provider!r}.")

@@ -168,13 +168,17 @@ def test_usage_summary_redacts_models_and_reports_request_quota_and_byo_token_to
     assert data["totals"]["failed_run_count"] == 1
     models = {row["model_key"]: row for row in data["models"]}
     assert models[SYSTEM_FREE_MODEL_KEY]["has_api_key"] is False
+    assert models[SYSTEM_FREE_MODEL_KEY]["supports_image_input"] is False
     assert models[SYSTEM_FREE_MODEL_KEY]["quota_used"] == 2
     assert models[SYSTEM_FREE_MODEL_KEY]["quota_remaining"] == 98
     assert models["deepseek/deepseek-chat"]["has_api_key"] is True
+    assert models["deepseek/deepseek-chat"]["supports_image_input"] is False
     assert "api_key" not in models["deepseek/deepseek-chat"]
     assert SYSTEM_FREE_MODEL_KEY not in [
         option["model_key"] for option in data["supported_models"]
     ]
+    supported_models = {option["model_key"]: option for option in data["supported_models"]}
+    assert supported_models["openai/gpt-4o-mini"]["supports_image_input"] is True
 
 
 @pytest.mark.django_db

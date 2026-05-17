@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import logging
 import secrets
 import string
-import urllib.error
-import urllib.request
 from datetime import timedelta
 
+import httpx
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -121,45 +119,101 @@ def _telegram_api_url(method: str) -> str:
     return f"https://api.telegram.org/bot{token}/{method}"
 
 
+def _post_telegram_json(method: str, payload: dict, *, log_context: str) -> dict:
+    try:
+        response = httpx.post(
+            _telegram_api_url(method),
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.exception(
+            "Telegram %s HTTP error status=%s body=%s",
+            log_context,
+            exc.response.status_code,
+            exc.response.text,
+        )
+        raise RuntimeError(
+            f"Telegram {log_context} HTTP error: {exc.response.status_code}",
+        ) from exc
+    except httpx.HTTPError as exc:
+        logger.exception("Telegram %s network error", log_context)
+        raise RuntimeError(f"Telegram {log_context} network error: {exc}") from exc
+
+    data = response.json()
+    if not data.get("ok"):
+        desc = data.get("description", response.text)
+        logger.error("Telegram %s failed: %s", log_context, desc)
+        raise RuntimeError(f"Telegram {log_context} error: {desc}")
+    return data
+
+
 def send_telegram_message(chat_id: str, text: str) -> dict:
     """
     Call Telegram Bot API ``sendMessage``. Returns the parsed JSON response.
 
     Raises ``RuntimeError`` on HTTP errors or Telegram ``ok: false`` responses.
     """
-    payload = json.dumps(
+    return _post_telegram_json(
+        "sendMessage",
         {
             "chat_id": chat_id,
             "text": markdown_to_telegram_html(text),
             "parse_mode": "HTML",
         },
-        ensure_ascii=False,
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        _telegram_api_url("sendMessage"),
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+        log_context="sendMessage",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        logger.exception(
-            "Telegram sendMessage HTTP error status=%s body=%s", exc.code, body
-        )
-        raise RuntimeError(f"Telegram API HTTP error: {exc.code}") from exc
-    except urllib.error.URLError as exc:
-        logger.exception("Telegram sendMessage network error")
-        raise RuntimeError(f"Telegram API network error: {exc}") from exc
 
-    data = json.loads(raw)
-    if not data.get("ok"):
-        desc = data.get("description", raw)
-        logger.error("Telegram sendMessage failed: %s", desc)
-        raise RuntimeError(f"Telegram API error: {desc}")
-    return data
+
+def get_telegram_file(file_id: str) -> dict:
+    """
+    Call Telegram Bot API ``getFile`` and return the result payload.
+
+    Raises ``RuntimeError`` on HTTP errors or Telegram ``ok: false`` responses.
+    """
+    data = _post_telegram_json(
+        "getFile",
+        {"file_id": file_id},
+        log_context="getFile",
+    )
+    result = data.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError("Telegram getFile response did not include a result object.")
+    return result
+
+
+def download_telegram_file(file_id: str) -> bytes:
+    """
+    Download a Telegram file by ``file_id`` using ``getFile`` metadata.
+    """
+    result = get_telegram_file(file_id)
+    file_path = result.get("file_path")
+    if not isinstance(file_path, str) or not file_path:
+        raise RuntimeError("Telegram getFile response did not include file_path.")
+
+    token = settings.TELEGRAM_BOT_TOKEN
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is not configured.")
+    try:
+        response = httpx.get(
+            f"https://api.telegram.org/file/bot{token}/{file_path}",
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.content
+    except httpx.HTTPStatusError as exc:
+        logger.exception(
+            "Telegram file download HTTP error status=%s body=%s",
+            exc.response.status_code,
+            exc.response.text,
+        )
+        raise RuntimeError(
+            f"Telegram file download HTTP error: {exc.response.status_code}",
+        ) from exc
+    except httpx.HTTPError as exc:
+        logger.exception("Telegram file download network error")
+        raise RuntimeError(f"Telegram file download network error: {exc}") from exc
 
 
 def set_telegram_webhook() -> dict:
@@ -180,32 +234,11 @@ def set_telegram_webhook() -> dict:
     if secret_token:
         payload_data["secret_token"] = secret_token
 
-    payload = json.dumps(payload_data).encode("utf-8")
-    req = urllib.request.Request(
-        _telegram_api_url("setWebhook"),
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
+    return _post_telegram_json(
+        "setWebhook",
+        payload_data,
+        log_context="setWebhook",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            raw = resp.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        logger.exception(
-            "Telegram setWebhook HTTP error status=%s body=%s", exc.code, body
-        )
-        raise RuntimeError(f"Telegram setWebhook HTTP error: {exc.code}") from exc
-    except urllib.error.URLError as exc:
-        logger.exception("Telegram setWebhook network error")
-        raise RuntimeError(f"Telegram setWebhook network error: {exc}") from exc
-
-    data = json.loads(raw)
-    if not data.get("ok"):
-        desc = data.get("description", raw)
-        logger.error("Telegram setWebhook failed: %s", desc)
-        raise RuntimeError(f"Telegram setWebhook error: {desc}")
-    return data
 
 
 def find_channel_by_telegram_chat_id(telegram_chat_id: str) -> Channel | None:

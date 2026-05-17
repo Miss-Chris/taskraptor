@@ -20,6 +20,7 @@ class UsageLlmModelOut(Schema):
     is_active: bool
     is_system: bool
     is_available: bool
+    supports_image_input: bool
     created_at: datetime
     updated_at: datetime
 
@@ -48,6 +49,7 @@ class SupportedModelOptionOut(Schema):
     provider: str
     display_name: str
     requires_api_key: bool
+    supports_image_input: bool
 
 
 class UsageSummaryOut(Schema):
@@ -68,4 +70,3 @@ class UsageModelUpdateIn(Schema):
     api_key: str | None = None
     context_message_limit: int | None = None
     is_active: bool | None = None
-

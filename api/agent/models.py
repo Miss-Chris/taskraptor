@@ -28,6 +28,7 @@ class MessageActor(models.TextChoices):
 class LlmProvider(str, enum.Enum):
     ANTHROPIC = "anthropic"
     DEEPSEEK = "deepseek"
+    OPENAI = "openai"
     SYSTEM_FREE = "system_free"
 
 
@@ -36,12 +37,26 @@ SUPPORTED_MODEL_KEYS: frozenset[str] = frozenset(
         "anthropic/claude-haiku-4-5-20251001",
         "anthropic/claude-sonnet-4-6",
         "deepseek/deepseek-chat",  # DeepSeek v3
+        "openai/gpt-4o-mini",
         "system_free",  # server-managed DeepSeek key with quota
     }
 )
 
 SYSTEM_FREE_MODEL_KEY = "system_free"
 SYSTEM_FREE_UNDERLYING_MODEL = "deepseek/deepseek-chat"
+
+
+class ModelCapabilities(models.TextChoices):
+    IMAGE_INPUT = "image_input", "Image input"
+
+
+MODEL_CAPABILITIES: dict[str, frozenset[str]] = {
+    "openai/gpt-4o-mini": frozenset({ModelCapabilities.IMAGE_INPUT}),
+}
+
+
+def capabilities_for_model_key(model_key: str) -> frozenset[str]:
+    return MODEL_CAPABILITIES.get(model_key, frozenset())
 
 
 class LlmModel(models.Model):
@@ -134,6 +149,12 @@ class LlmModel(models.Model):
             raise ValidationError(
                 {"context_message_limit": "Must be between 1 and 1024."},
             )
+
+    @property
+    def supports_image_input(self) -> bool:
+        return ModelCapabilities.IMAGE_INPUT in capabilities_for_model_key(
+            self.model_key,
+        )
 
     @property
     def is_quota_exceeded(self) -> bool:

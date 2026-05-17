@@ -10,7 +10,11 @@ from ninja import Router, Status
 from accounts.bearer import AuthBearer
 from accounts.schemas import ErrorOut
 from channels.schemas import JoinCodeOut, TelegramStatusOut
-from channels.tasks import process_telegram_join, process_telegram_text
+from channels.tasks import (
+    process_telegram_attachment,
+    process_telegram_join,
+    process_telegram_text,
+)
 from channels.telegram import create_join_code, get_active_telegram_channel, set_telegram_webhook
 from channels.telegram_webhook import parse_telegram_webhook_body
 
@@ -57,6 +61,26 @@ def telegram_webhook(request: HttpRequest) -> JsonResponse:
         except Exception:
             logger.exception(
                 "telegram webhook: failed to enqueue text chat_id=%s",
+                event.chat_id,
+            )
+    elif (
+        event.action == "attachment"
+        and event.chat_id
+        and event.attachment_kind
+        and event.file_id
+    ):
+        try:
+            process_telegram_attachment.delay(
+                event.chat_id,
+                event.attachment_kind,
+                event.file_id,
+                event.caption,
+                event.file_name,
+                event.mime_type,
+            )
+        except Exception:
+            logger.exception(
+                "telegram webhook: failed to enqueue attachment chat_id=%s",
                 event.chat_id,
             )
 

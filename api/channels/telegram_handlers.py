@@ -8,6 +8,11 @@ from channels.telegram import (
     redeem_join_code,
     send_telegram_message,
 )
+from channels.telegram_media import (
+    NoImageCapableModelError,
+    UnsupportedTelegramAttachmentError,
+    build_attachment_user_message,
+)
 from channels.workflow import NoActiveLlmModel, handle_user_incoming
 
 logger = logging.getLogger(__name__)
@@ -19,6 +24,10 @@ NO_ACTIVE_MODEL_MESSAGE = (
     "No active AI model is configured for your account. Please add one in TaskRaptor."
 )
 WORKFLOW_FAILURE_MESSAGE = "Something went wrong processing your message. Please try again later."
+UNSUPPORTED_ATTACHMENT_MESSAGE = "I can currently read photos and UTF-8 text files."
+NO_IMAGE_MODEL_MESSAGE = (
+    "Image attachments need at least one configured image-capable model on your account."
+)
 
 
 def safe_send_telegram_message(chat_id: str, text: str, *, log_context: str) -> bool:
@@ -74,6 +83,80 @@ def handle_telegram_text(chat_id: str, text: str) -> None:
     runtime_conversation = get_conversation(channel.pk)
     try:
         handle_user_incoming(runtime_conversation.conversation, normalized_text)
+    except NoActiveLlmModel:
+        safe_send_telegram_message(
+            chat_id,
+            NO_ACTIVE_MODEL_MESSAGE,
+            log_context="NoActiveLlmModel notice",
+        )
+    except Exception:
+        logger.exception(
+            "telegram webhook: handle_user_incoming failed channel_id=%s",
+            channel.pk,
+        )
+        safe_send_telegram_message(
+            chat_id,
+            WORKFLOW_FAILURE_MESSAGE,
+            log_context="workflow error",
+        )
+
+
+def handle_telegram_attachment(
+    chat_id: str,
+    attachment_kind: str,
+    file_id: str,
+    *,
+    caption: str = "",
+    file_name: str = "",
+    mime_type: str = "",
+) -> None:
+    channel = find_channel_by_telegram_chat_id(chat_id)
+    if channel is None:
+        safe_send_telegram_message(
+            chat_id,
+            UNLINKED_CHAT_MESSAGE,
+            log_context="unlink notice",
+        )
+        return
+
+    try:
+        message = build_attachment_user_message(
+            channel.user,
+            attachment_kind=attachment_kind,
+            file_id=file_id,
+            caption=caption,
+            file_name=file_name,
+            mime_type=mime_type,
+        )
+    except UnsupportedTelegramAttachmentError:
+        safe_send_telegram_message(
+            chat_id,
+            UNSUPPORTED_ATTACHMENT_MESSAGE,
+            log_context="unsupported attachment notice",
+        )
+        return
+    except NoImageCapableModelError:
+        safe_send_telegram_message(
+            chat_id,
+            NO_IMAGE_MODEL_MESSAGE,
+            log_context="no image-capable model notice",
+        )
+        return
+    except Exception:
+        logger.exception(
+            "telegram webhook: attachment conversion failed channel_id=%s",
+            channel.pk,
+        )
+        safe_send_telegram_message(
+            chat_id,
+            WORKFLOW_FAILURE_MESSAGE,
+            log_context="attachment conversion error",
+        )
+        return
+
+    runtime_conversation = get_conversation(channel.pk)
+    try:
+        handle_user_incoming(runtime_conversation.conversation, message)
     except NoActiveLlmModel:
         safe_send_telegram_message(
             chat_id,

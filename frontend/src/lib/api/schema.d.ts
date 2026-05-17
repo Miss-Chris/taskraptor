@@ -1296,6 +1296,8 @@ export interface components {
             display_name: string;
             /** Requires Api Key */
             requires_api_key: boolean;
+            /** Supports Image Input */
+            supports_image_input: boolean;
         };
         /** UsageLlmModelOut */
         UsageLlmModelOut: {
@@ -1328,6 +1330,8 @@ export interface components {
             is_system: boolean;
             /** Is Available */
             is_available: boolean;
+            /** Supports Image Input */
+            supports_image_input: boolean;
             /**
              * Created At
              * Format: date-time

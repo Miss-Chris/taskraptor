@@ -80,6 +80,7 @@ def _to_model_out(model: LlmModel, *, system_quota_used: int) -> UsageLlmModelOu
         is_active=model.is_active,
         is_system=model.model_key == SYSTEM_FREE_MODEL_KEY,
         is_available=is_available,
+        supports_image_input=model.supports_image_input,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -104,6 +105,7 @@ def _supported_model_options() -> list[SupportedModelOptionOut]:
             provider=_provider_for_model_key(model_key),
             display_name=_display_name_for_model_key(model_key),
             requires_api_key=True,
+            supports_image_input=LlmModel(model_key=model_key).supports_image_input,
         )
         for model_key in sorted(SUPPORTED_MODEL_KEYS)
         if model_key != SYSTEM_FREE_MODEL_KEY

@@ -47,7 +47,7 @@ import {
 const DEFAULT_CONTEXT_LIMIT = 25
 
 const INCLUDED_MODEL_DESCRIPTION =
-  "50 requests per month, free. No API key needed. Good for trying things out and light daily use. Connect your own Anthropic or DeepSeek key for unlimited use."
+  "50 requests per month, free. No API key needed. Good for trying things out and light daily use. Connect your own Anthropic, DeepSeek, or OpenAI key for unlimited use."
 
 /** Produce a human-readable model name from the backend display_name. */
 function humanizeDisplayName(displayName: string, provider: string): string {
@@ -195,7 +195,7 @@ function ModelDialog({
             <DialogDescription>
               {isEdit
                 ? "Update the API key or context limit for this model."
-                : "Connect your own Anthropic or DeepSeek API key."}
+                : "Connect your own Anthropic, DeepSeek, or OpenAI API key."}
             </DialogDescription>
           </DialogHeader>
 
@@ -320,6 +320,9 @@ function CurrentlyUsingCard({ model }: { model: UsageLlmModel }) {
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-section-title">{name}</h2>
             <StatusPill tone="success">Active</StatusPill>
+            {model.supports_image_input && (
+              <StatusPill tone="neutral">Images</StatusPill>
+            )}
             {!model.is_available && (
               <StatusPill tone="danger">Unavailable</StatusPill>
             )}
@@ -399,6 +402,9 @@ function ModelListItem({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">{name}</span>
               <StatusPill tone="neutral">{sourceLabel(model)}</StatusPill>
+              {model.supports_image_input && (
+                <StatusPill tone="neutral">Images</StatusPill>
+              )}
               {model.is_active && !model.is_available && (
                 <StatusPill tone="danger">Unavailable</StatusPill>
               )}
