@@ -91,6 +91,11 @@ function getInitialDueAt(task: Task | null | undefined): string {
   return task.due_at_local?.slice(0, 16) ?? task.due_at.slice(0, 16)
 }
 
+function getInitialRemindAt(task: Task | null | undefined): string {
+  if (!task?.remind_at) return ""
+  return task.remind_at_local?.slice(0, 16) ?? task.remind_at.slice(0, 16)
+}
+
 function dueInputType(dueType: DueType): "date" | "datetime-local" {
   return dueType === "date" ? "date" : "datetime-local"
 }
@@ -117,6 +122,7 @@ export function TaskFormDialog({
   )
   const [dueType, setDueType] = useState<DueType>(getInitialDueType(task))
   const [dueAt, setDueAt] = useState(getInitialDueAt(task))
+  const [remindAt, setRemindAt] = useState(getInitialRemindAt(task))
   const [tags, setTags] = useState<string[]>(task?.tags ?? [])
   const [tagInput, setTagInput] = useState("")
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -184,6 +190,11 @@ export function TaskFormDialog({
         } else if (task.due_at) {
           body.clear_due_at = true
         }
+        if (remindAt.trim()) {
+          body.remind_at = remindAt.trim()
+        } else if (task.remind_at) {
+          body.clear_remind_at = true
+        }
         const savedTask = await updateTask.mutateAsync({
           params: { path: { task_id: task.id } },
           body,
@@ -199,6 +210,9 @@ export function TaskFormDialog({
         }
         if (nextDueAt) {
           body.due_at = nextDueAt
+        }
+        if (remindAt.trim()) {
+          body.remind_at = remindAt.trim()
         }
         const savedTask = await createTask.mutateAsync({ body })
         onSaved?.(savedTask)
@@ -329,6 +343,16 @@ export function TaskFormDialog({
                   />
                 )}
               </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="task-remind-at">Reminder</Label>
+              <Input
+                id="task-remind-at"
+                type="datetime-local"
+                value={remindAt}
+                onChange={(e) => setRemindAt(e.target.value)}
+              />
             </div>
 
             {/* Tags — chip-in-input pattern */}

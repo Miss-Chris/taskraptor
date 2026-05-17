@@ -21,6 +21,9 @@ class TaskOut(Schema):
     timezone: str
     tags: list[str]
     remind_at: datetime | None
+    remind_at_local: str | None
+    remind_date_local: str | None
+    reminded_at: datetime | None
     completed_at: datetime | None
     archived_at: datetime | None
     created_at: datetime
@@ -38,6 +41,7 @@ class TaskCreateIn(Schema):
     due_at: str | None = None
     due_type: DueTypeValue | None = None
     tags: list[str] = Field(default_factory=list)
+    remind_at: str | None = None
 
 
 class TaskUpdateIn(Schema):
@@ -48,6 +52,8 @@ class TaskUpdateIn(Schema):
     due_type: DueTypeValue | None = None
     clear_due_at: bool | None = None
     tags: list[str] | None = None
+    remind_at: str | None = None
+    clear_remind_at: bool | None = None
 
 
 class StatusCountItem(Schema):

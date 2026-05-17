@@ -59,10 +59,15 @@ def create_task(
     due_at: datetime | None = None,
     due_type: str = DueType.TIME,
     tags: list[str] | None = None,
+    remind_at: datetime | None = None,
 ) -> Task:
     if due_at is not None:
         user_timezone = User.objects.values_list("timezone", flat=True).get(pk=user_id)
         due_at = normalize_due_at_for_user(due_at, user_timezone)
+    if remind_at is not None:
+        user_timezone = User.objects.values_list("timezone", flat=True).get(pk=user_id)
+        remind_at = normalize_remind_at_for_user(remind_at, user_timezone)
+        validate_future_reminder(remind_at)
 
     completed_at = timezone.now() if status == TaskStatus.COMPLETED else None
     return Task.objects.create(
@@ -73,6 +78,7 @@ def create_task(
         due_at=due_at,
         due_type=due_type,
         tags=tags or [],
+        remind_at=remind_at,
         completed_at=completed_at,
     )
 
@@ -86,6 +92,20 @@ def normalize_due_at_for_user(
     return normalize_to_utc(due_at, user_timezone)
 
 
+def normalize_remind_at_for_user(
+    remind_at: datetime | None,
+    user_timezone: str | None,
+) -> datetime | None:
+    if remind_at is None:
+        return None
+    return normalize_to_utc(remind_at, user_timezone)
+
+
+def validate_future_reminder(remind_at: datetime | None) -> None:
+    if remind_at is not None and remind_at <= timezone.now():
+        raise ValueError("Reminder time must be in the future.")
+
+
 def update_task(
     task: Task,
     *,
@@ -97,9 +117,13 @@ def update_task(
     due_type: Any = UNSET,
     tags: Any = UNSET,
     clear_due_at: bool = False,
+    remind_at: Any = UNSET,
+    clear_remind_at: bool = False,
 ) -> list[str]:
     if clear_due_at and due_at is not UNSET and due_at is not None:
         raise ValueError("Cannot set due_at and clear_due_at in the same update.")
+    if clear_remind_at and remind_at is not UNSET and remind_at is not None:
+        raise ValueError("Cannot set remind_at and clear_remind_at in the same update.")
 
     update_fields: list[str] = []
 
@@ -136,6 +160,16 @@ def update_task(
     if tags is not UNSET:
         task.tags = tags
         update_fields.append("tags")
+
+    if remind_at is not UNSET:
+        task.remind_at = normalize_remind_at_for_user(remind_at, task.user.timezone)
+        validate_future_reminder(task.remind_at)
+        task.reminded_at = None
+        update_fields.extend(["remind_at", "reminded_at"])
+    elif clear_remind_at:
+        task.remind_at = None
+        task.reminded_at = None
+        update_fields.extend(["remind_at", "reminded_at"])
 
     if update_fields:
         task.save(

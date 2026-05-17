@@ -66,6 +66,7 @@ function formatAuditAction(action: string): string {
     name_changed: "Name changed",
     priority_changed: "Priority changed",
     tags_changed: "Tags changed",
+    reminder_changed: "Reminder changed",
     deleted: "Deleted",
   }
   return labels[action] ?? action.replace(/_/g, " ")
@@ -368,6 +369,10 @@ export function TaskExplorer({
                     <DetailRow
                       label="Reminder"
                       value={formatTs(selectedTask.remind_at)}
+                    />
+                    <DetailRow
+                      label="Reminded"
+                      value={formatTs(selectedTask.reminded_at)}
                     />
                     <DetailRow
                       label="Completed"

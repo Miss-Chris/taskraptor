@@ -149,6 +149,7 @@ class DebugRelatedTaskOut(Schema):
     due_type: str
     tags: list[str]
     remind_at: str | None
+    reminded_at: str | None
     completed_at: str | None
     archived_at: str | None
     deleted_at: str | None

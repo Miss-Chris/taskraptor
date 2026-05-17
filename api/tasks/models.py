@@ -21,6 +21,7 @@ class AuditAction(models.TextChoices):
     NAME_CHANGED = "name_changed", "Name changed"
     PRIORITY_CHANGED = "priority_changed", "Priority changed"
     TAGS_CHANGED = "tags_changed", "Tags changed"
+    REMINDER_CHANGED = "reminder_changed", "Reminder changed"
     DELETED = "deleted", "Deleted"
 
 
@@ -83,6 +84,7 @@ class Task(models.Model):
         help_text="JSON array of tag strings.",
     )
     remind_at = models.DateTimeField(null=True, blank=True)
+    reminded_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     archived_at = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -106,7 +108,7 @@ class Task(models.Model):
             audit_actor_id = getattr(audit_actor, "pk", None)
         update_fields = kwargs.get("update_fields")
 
-        tracked = {"status", "name", "priority", "tags"}
+        tracked = {"status", "name", "priority", "tags", "remind_at"}
         if update_fields is not None:
             tracked &= set(update_fields)
 
@@ -114,7 +116,7 @@ class Task(models.Model):
         if self.pk and tracked:
             old_row = (
                 Task.objects.filter(pk=self.pk)
-                .values("status", "name", "priority", "tags")
+                .values("status", "name", "priority", "tags", "remind_at")
                 .first()
             )
 
@@ -165,6 +167,18 @@ class Task(models.Model):
                     if isinstance(old_row["tags"], list)
                     else old_row["tags"],
                     new_value=list(self.tags) if isinstance(self.tags, list) else self.tags,
+                    actor_id=audit_actor_id,
+                )
+            )
+        if "remind_at" in tracked and old_row["remind_at"] != self.remind_at:
+            logs.append(
+                TaskAuditLog(
+                    task=self,
+                    action=AuditAction.REMINDER_CHANGED,
+                    old_value=old_row["remind_at"].isoformat()
+                    if old_row["remind_at"]
+                    else None,
+                    new_value=self.remind_at.isoformat() if self.remind_at else None,
                     actor_id=audit_actor_id,
                 )
             )

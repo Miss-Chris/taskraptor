@@ -127,6 +127,46 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "set_task_reminder",
+            "description": "Set or replace the task's one-shot future reminder time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID of the task to remind about.",
+                    },
+                    "remind_at": {
+                        "type": "string",
+                        "description": "Future ISO 8601 local datetime for the reminder. Date-only values are not allowed.",
+                    },
+                },
+                "required": ["task_id", "remind_at"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_task_reminder",
+            "description": "Clear the task's scheduled reminder.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "UUID of the task whose reminder should be cleared.",
+                    },
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_task",
             "description": "Soft-delete a task. The task is not permanently removed.",
             "parameters": {
@@ -236,6 +276,15 @@ class DeleteTaskArgs(BaseModel):
     task_id: UUID
 
 
+class SetTaskReminderArgs(BaseModel):
+    task_id: UUID
+    remind_at: str
+
+
+class ClearTaskReminderArgs(BaseModel):
+    task_id: UUID
+
+
 class QueryTasksArgs(BaseModel):
     status: TaskStatus | None = None
     tag: str | None = None
@@ -261,6 +310,13 @@ def _parse_due_at(value: str | None, user_timezone: str) -> tuple[datetime | Non
     if value is None:
         return due_at, None
     return due_at, DueType.DATE if is_date_only else DueType.TIME
+
+
+def _parse_remind_at(value: str, user_timezone: str) -> datetime:
+    remind_at, is_date_only = parse_user_datetime(value, user_timezone)
+    if remind_at is None or is_date_only:
+        raise ValueError("Reminder time requires a datetime.")
+    return remind_at
 
 
 def _json_default(value: Any) -> str:
@@ -331,9 +387,47 @@ def _tool_delete_task(args: DeleteTaskArgs, user_id: UUID) -> str:
     return json.dumps({"ok": True, "task_id": str(args.task_id)})
 
 
+def _tool_set_task_reminder(args: SetTaskReminderArgs, user_id: UUID) -> str:
+    try:
+        task = Task.objects.get(pk=args.task_id, user_id=user_id, deleted_at__isnull=True)
+    except Task.DoesNotExist:
+        return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
+
+    user = User.objects.get(pk=user_id)
+    remind_at = _parse_remind_at(args.remind_at, user.timezone)
+    update_fields = update_task(
+        task,
+        audit_actor_id=user_id,
+        remind_at=remind_at,
+    )
+    return json.dumps(
+        {
+            "ok": True,
+            "task_id": str(task.pk),
+            "updated_fields": update_fields,
+            "remind_at": task.remind_at.isoformat() if task.remind_at else None,
+        }
+    )
+
+
+def _tool_clear_task_reminder(args: ClearTaskReminderArgs, user_id: UUID) -> str:
+    try:
+        task = Task.objects.get(pk=args.task_id, user_id=user_id, deleted_at__isnull=True)
+    except Task.DoesNotExist:
+        return json.dumps({"ok": False, "error": f"Task {args.task_id} not found."})
+
+    update_fields = update_task(
+        task,
+        audit_actor_id=user_id,
+        clear_remind_at=True,
+    )
+    return json.dumps({"ok": True, "task_id": str(task.pk), "updated_fields": update_fields})
+
+
 def _task_to_dict(task: Task, user_timezone: str) -> dict[str, Any]:
     tags = task.tags if isinstance(task.tags, list) else []
     due_at = serialize_datetime_with_local(task.due_at, user_timezone)
+    remind_at = serialize_datetime_with_local(task.remind_at, user_timezone)
     return {
         "id": str(task.pk),
         "name": task.name,
@@ -345,6 +439,10 @@ def _task_to_dict(task: Task, user_timezone: str) -> dict[str, Any]:
         "due_type": task.due_type,
         "timezone": due_at["timezone"],
         "tags": [str(tag) for tag in tags],
+        "remind_at": task.remind_at.isoformat() if task.remind_at else None,
+        "remind_at_local": remind_at["local"],
+        "remind_date_local": remind_at["local_date"],
+        "reminded_at": task.reminded_at.isoformat() if task.reminded_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "archived_at": task.archived_at.isoformat() if task.archived_at else None,
         "created_at": task.created_at.isoformat() if task.created_at else None,
@@ -443,6 +541,8 @@ _TOOL_MAP = {
     "respond_to_user": (RespondToUserArgs, _tool_respond_to_user),
     "create_task": (CreateTaskArgs, _tool_create_task),
     "edit_task": (EditTaskArgs, _tool_edit_task),
+    "set_task_reminder": (SetTaskReminderArgs, _tool_set_task_reminder),
+    "clear_task_reminder": (ClearTaskReminderArgs, _tool_clear_task_reminder),
     "delete_task": (DeleteTaskArgs, _tool_delete_task),
     "query_tasks": (QueryTasksArgs, _tool_query_tasks),
 }

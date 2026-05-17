@@ -154,6 +154,55 @@ def test_create_task_rejects_invalid_due_at(client):
 
 
 @pytest.mark.django_db
+def test_create_task_accepts_future_reminder_and_serializes_local_fields(client, monkeypatch):
+    from accounts.models import User
+
+    token = _register_and_token(client, "create-reminder@example.com")
+    user = User.objects.get(email="create-reminder@example.com")
+    user.timezone = "America/Toronto"
+    user.save(update_fields=["timezone"])
+    monkeypatch.setattr("tasks.services.timezone.now", lambda: datetime(2026, 4, 10, 12, 0, tzinfo=UTC))
+
+    response = client.post(
+        LIST_URL,
+        data={"name": "Call mom", "remind_at": "2026-04-10T09:30:00"},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["remind_at"] == "2026-04-10T13:30:00Z"
+    assert body["remind_at_local"] == "2026-04-10T09:30:00-04:00"
+    assert body["remind_date_local"] == "2026-04-10"
+    assert body["reminded_at"] is None
+
+
+@pytest.mark.django_db
+def test_create_task_rejects_invalid_and_past_reminder(client, monkeypatch):
+    token = _register_and_token(client, "bad-reminder@example.com")
+    monkeypatch.setattr("tasks.services.timezone.now", lambda: datetime(2026, 4, 10, 12, 0, tzinfo=UTC))
+
+    invalid = client.post(
+        LIST_URL,
+        data={"name": "Bad", "remind_at": "2026-04-10"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    past = client.post(
+        LIST_URL,
+        data={"name": "Past", "remind_at": "2026-04-10T07:00:00Z"},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert invalid.status_code == 400
+    assert invalid.json()["detail"] == "Invalid remind_at."
+    assert past.status_code == 400
+    assert past.json()["detail"] == "Reminder time must be in the future."
+
+
+@pytest.mark.django_db
 def test_update_task_success_audits_changes_and_sets_completed_at(client):
     from accounts.models import User
 
@@ -215,6 +264,35 @@ def test_update_task_can_clear_due_at(client):
     assert response.json()["due_at"] is None
     task.refresh_from_db()
     assert task.due_at is None
+
+
+@pytest.mark.django_db
+def test_update_task_sets_and_clears_reminder_with_audit(client, monkeypatch):
+    from accounts.models import User
+
+    token = _register_and_token(client, "update-reminder@example.com")
+    user = User.objects.get(email="update-reminder@example.com")
+    task = create_task(user_id=user.pk, name="Follow up")
+    monkeypatch.setattr("tasks.services.timezone.now", lambda: datetime(2026, 4, 10, 12, 0, tzinfo=UTC))
+
+    set_response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={"remind_at": "2026-04-10T13:00:00Z"},
+        content_type="application/json",
+        **_auth(token),
+    )
+    clear_response = client.patch(
+        f"/api/tasks/{task.pk}",
+        data={"clear_remind_at": True},
+        content_type="application/json",
+        **_auth(token),
+    )
+
+    assert set_response.status_code == 200
+    assert set_response.json()["remind_at"] == "2026-04-10T13:00:00Z"
+    assert clear_response.status_code == 200
+    assert clear_response.json()["remind_at"] is None
+    assert TaskAuditLog.objects.filter(task=task, action=AuditAction.REMINDER_CHANGED).count() == 2
 
 
 @pytest.mark.django_db

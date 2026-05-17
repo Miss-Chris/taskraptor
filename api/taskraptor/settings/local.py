@@ -78,4 +78,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "automations.dispatch_due_automations",
         "schedule": 60.0,
     },
+    "dispatch-due-task-reminders-every-minute": {
+        "task": "tasks.dispatch_due_task_reminders",
+        "schedule": 60.0,
+    },
 }

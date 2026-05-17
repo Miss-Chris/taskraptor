@@ -45,6 +45,7 @@ def _base_queryset(user: User) -> QuerySet[Task]:
 def _to_task_out(task: Task, user: User) -> TaskOut:
     tags = task.tags if isinstance(task.tags, list) else []
     due_at = serialize_datetime_with_local(task.due_at, user.timezone)
+    remind_at = serialize_datetime_with_local(task.remind_at, user.timezone)
     return TaskOut(
         id=task.id,
         name=task.name,
@@ -57,6 +58,9 @@ def _to_task_out(task: Task, user: User) -> TaskOut:
         timezone=due_at["timezone"] or user.timezone,
         tags=[str(t) for t in tags],
         remind_at=task.remind_at,
+        remind_at_local=remind_at["local"],
+        remind_date_local=remind_at["local_date"],
+        reminded_at=task.reminded_at,
         completed_at=task.completed_at,
         archived_at=task.archived_at,
         created_at=task.created_at,
@@ -86,6 +90,13 @@ def _parse_due_at(value: str | None, user: User):
     if value is None:
         return due_at, None
     return due_at, "date" if is_date_only else "time"
+
+
+def _parse_remind_at(value: str | None, user: User):
+    remind_at, is_date_only = parse_user_datetime(value, user.timezone)
+    if value is not None and is_date_only:
+        raise ValueError("Reminder time requires a datetime.")
+    return remind_at
 
 
 @router.get(
@@ -194,16 +205,24 @@ def create_task_endpoint(request: AuthedHttpRequest, payload: TaskCreateIn):
         due_at, inferred_due_type = _parse_due_at(payload.due_at, user)
     except ValueError:
         return Status(400, {"detail": "Invalid due_at."})
+    try:
+        remind_at = _parse_remind_at(payload.remind_at, user)
+    except ValueError:
+        return Status(400, {"detail": "Invalid remind_at."})
 
-    task = create_task(
-        user_id=user.pk,
-        name=name,
-        status=payload.status or TaskStatus.PENDING,
-        priority=payload.priority if payload.priority is not None else 0,
-        due_at=due_at,
-        due_type=payload.due_type or inferred_due_type or "time",
-        tags=payload.tags,
-    )
+    try:
+        task = create_task(
+            user_id=user.pk,
+            name=name,
+            status=payload.status or TaskStatus.PENDING,
+            priority=payload.priority if payload.priority is not None else 0,
+            due_at=due_at,
+            due_type=payload.due_type or inferred_due_type or "time",
+            tags=payload.tags,
+            remind_at=remind_at,
+        )
+    except ValueError as exc:
+        return Status(400, {"detail": str(exc)})
     return Status(201, _to_task_out(task, user))
 
 
@@ -257,6 +276,18 @@ def update_task_endpoint(
             400,
             {"detail": "Cannot set due_at and clear_due_at in the same update."},
         )
+    remind_at = UNSET
+    clear_remind_at = bool(payload.clear_remind_at)
+    if clear_remind_at and "remind_at" in fields and payload.remind_at is not None:
+        return Status(
+            400,
+            {"detail": "Cannot set remind_at and clear_remind_at in the same update."},
+        )
+    if "remind_at" in fields:
+        try:
+            remind_at = _parse_remind_at(payload.remind_at, user)
+        except ValueError:
+            return Status(400, {"detail": "Invalid remind_at."})
 
     if "due_at" in fields:
         try:
@@ -281,6 +312,8 @@ def update_task_endpoint(
             due_type=due_type,
             tags=payload.tags if payload.tags is not None else UNSET,
             clear_due_at=clear_due_at,
+            remind_at=remind_at,
+            clear_remind_at=clear_remind_at,
         )
     except ValueError as exc:
         return Status(400, {"detail": str(exc)})

@@ -114,6 +114,10 @@ export function TaskDetailPage() {
               <dd className="font-medium">{formatTs(task.remind_at)}</dd>
             </div>
             <div>
+              <dt className="text-label">Reminded at</dt>
+              <dd className="font-medium">{formatTs(task.reminded_at)}</dd>
+            </div>
+            <div>
               <dt className="text-label">Completed at</dt>
               <dd className="font-medium">{formatTs(task.completed_at)}</dd>
             </div>

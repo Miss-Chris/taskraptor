@@ -72,6 +72,56 @@ def test_edit_task_tool_can_clear_due_at(test_user):
 
 
 @pytest.mark.django_db
+def test_set_and_clear_task_reminder_tools(test_user, monkeypatch):
+    task = create_task(user_id=test_user.pk, name="Call dentist")
+    monkeypatch.setattr("tasks.services.timezone.now", lambda: datetime(2026, 4, 10, 12, 0, tzinfo=UTC))
+
+    set_result = json.loads(
+        execute_tool(
+            "set_task_reminder",
+            {"task_id": task.pk, "remind_at": "2026-04-10T13:00:00Z"},
+            test_user.pk,
+        )
+    )
+    clear_result = json.loads(
+        execute_tool("clear_task_reminder", {"task_id": task.pk}, test_user.pk)
+    )
+
+    assert set_result["ok"] is True
+    assert "remind_at" in set_result["updated_fields"]
+    assert clear_result["ok"] is True
+    task.refresh_from_db()
+    assert task.remind_at is None
+
+
+@pytest.mark.django_db
+def test_set_task_reminder_tool_rejects_past_and_other_users_tasks(test_user, monkeypatch):
+    other_user = User.objects.create_user("other-reminder@example.com", "testpass123")
+    task = create_task(user_id=other_user.pk, name="Private")
+    monkeypatch.setattr("tasks.services.timezone.now", lambda: datetime(2026, 4, 10, 12, 0, tzinfo=UTC))
+
+    missing = json.loads(
+        execute_tool(
+            "set_task_reminder",
+            {"task_id": task.pk, "remind_at": "2026-04-10T13:00:00Z"},
+            test_user.pk,
+        )
+    )
+    own = create_task(user_id=test_user.pk, name="Own")
+    past = json.loads(
+        execute_tool(
+            "set_task_reminder",
+            {"task_id": own.pk, "remind_at": "2026-04-10T11:00:00Z"},
+            test_user.pk,
+        )
+    )
+
+    assert missing["ok"] is False
+    assert past["ok"] is False
+    assert past["error"] == "Reminder time must be in the future."
+
+
+@pytest.mark.django_db
 def test_create_task_tool_interprets_naive_due_at_in_user_timezone(test_user):
     test_user.timezone = "America/Toronto"
     test_user.save(update_fields=["timezone"])
@@ -226,6 +276,24 @@ def test_query_tasks_tool_returns_utc_and_local_due_at_fields(test_user):
     assert returned["due_at_local"] == "2026-04-10T09:30:00-04:00"
     assert returned["due_date_local"] == "2026-04-10"
     assert returned["timezone"] == "America/Toronto"
+
+
+@pytest.mark.django_db
+def test_query_tasks_tool_returns_reminder_fields(test_user):
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+    task = create_task(user_id=test_user.pk, name="Reminder fields")
+    task.remind_at = datetime(2026, 4, 10, 13, 30, tzinfo=UTC)
+    task.reminded_at = datetime(2026, 4, 10, 13, 31, tzinfo=UTC)
+    task.save(update_fields=["remind_at", "reminded_at"])
+
+    result = json.loads(execute_tool("query_tasks", {"search": "Reminder fields"}, test_user.pk))
+    returned = result["tasks"][0]
+
+    assert returned["remind_at"] == "2026-04-10T13:30:00+00:00"
+    assert returned["remind_at_local"] == "2026-04-10T09:30:00-04:00"
+    assert returned["remind_date_local"] == "2026-04-10"
+    assert returned["reminded_at"] == "2026-04-10T13:31:00+00:00"
 
 
 @pytest.mark.django_db

@@ -1068,6 +1068,7 @@ export interface components {
             tags: string[];
             /** Remind At */
             remind_at: string | null;
+            reminded_at: string | null;
             /** Completed At */
             completed_at: string | null;
             /** Archived At */
@@ -1187,6 +1188,9 @@ export interface components {
             tags: string[];
             /** Remind At */
             remind_at: string | null;
+            remind_at_local: string | null;
+            remind_date_local: string | null;
+            reminded_at: string | null;
             /** Completed At */
             completed_at: string | null;
             /** Archived At */
@@ -1211,6 +1215,7 @@ export interface components {
             due_type?: ("date" | "time") | null;
             /** Tags */
             tags?: string[];
+            remind_at?: string | null;
         };
         /** TaskAuditLogListOut */
         TaskAuditLogListOut: {
@@ -1259,6 +1264,8 @@ export interface components {
             clear_due_at?: boolean | null;
             /** Tags */
             tags?: string[] | null;
+            remind_at?: string | null;
+            clear_remind_at?: boolean | null;
         };
         /** SupportedModelOptionOut */
         SupportedModelOptionOut: {

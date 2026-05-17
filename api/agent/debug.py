@@ -391,6 +391,7 @@ def _task_summary(task: Task) -> dict[str, Any]:
         "due_type": task.due_type,
         "tags": _serialize(task.tags if isinstance(task.tags, list) else []),
         "remind_at": _serialize(task.remind_at),
+        "reminded_at": _serialize(task.reminded_at),
         "completed_at": _serialize(task.completed_at),
         "archived_at": _serialize(task.archived_at),
         "deleted_at": _serialize(task.deleted_at),
@@ -426,7 +427,14 @@ def _automation_summary(automation: Automation) -> dict[str, Any]:
 def _extract_task_ids(logs: Iterable[MessageLog]) -> set[UUID]:
     task_ids: set[UUID] = set()
     for log in logs:
-        if log.tool_name not in {"create_task", "edit_task", "delete_task", "query_tasks"}:
+        if log.tool_name not in {
+            "create_task",
+            "edit_task",
+            "set_task_reminder",
+            "clear_task_reminder",
+            "delete_task",
+            "query_tasks",
+        }:
             continue
         if isinstance(log.metadata, dict):
             _collect_task_ids(log.metadata.get("arguments"), task_ids)
