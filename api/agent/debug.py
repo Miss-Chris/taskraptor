@@ -184,6 +184,8 @@ def render_debug_markdown(bundle: dict[str, Any]) -> str:
     lines.append(f"- id: `{user['id']}`")
     lines.append(f"- email: `{user['email']}`")
     lines.append(f"- timezone: `{user['timezone']}`")
+    lines.append(f"- persona: `{user['persona']}`")
+    lines.append(f"- custom_persona_present: {user['custom_persona_present']}")
     lines.append(f"- prompt_instructions_length: {user['prompt_instructions_length']}")
     lines.append("")
     lines.append("## Conversation")
@@ -278,10 +280,13 @@ def render_debug_markdown(bundle: dict[str, Any]) -> str:
 
 def _user_summary(user: User) -> dict[str, Any]:
     prompt = user.prompt_instructions or ""
+    custom_persona = user.custom_persona or ""
     return {
         "id": str(user.pk),
         "email": user.email,
         "timezone": user.timezone,
+        "persona": user.persona,
+        "custom_persona_present": bool(custom_persona.strip()),
         "prompt_instructions_present": bool(prompt.strip()),
         "prompt_instructions_length": len(prompt),
         "date_joined": _serialize(user.date_joined),

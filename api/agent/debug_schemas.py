@@ -9,6 +9,8 @@ class DebugUserOut(Schema):
     id: str
     email: str
     timezone: str | None
+    persona: str
+    custom_persona_present: bool
     prompt_instructions_present: bool
     prompt_instructions_length: int
     date_joined: str | None

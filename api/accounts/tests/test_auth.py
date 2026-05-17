@@ -301,6 +301,8 @@ def test_get_settings_authenticated(client):
     data = response.json()
     assert data["timezone"] is None
     assert data["prompt_instructions"] == ""
+    assert data["persona"] == "helpful"
+    assert data["custom_persona"] == ""
 
 
 @pytest.mark.django_db
@@ -344,6 +346,47 @@ def test_update_settings_prompt_instructions_success(client):
 
 
 @pytest.mark.django_db
+def test_update_settings_persona_success(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-persona@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"persona": "encouraging"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["persona"] == "encouraging"
+
+
+@pytest.mark.django_db
+def test_update_settings_custom_persona_success(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-custom-persona@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"persona": "custom", "custom_persona": "Use clipped sentences."},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["persona"] == "custom"
+    assert response.json()["custom_persona"] == "Use clipped sentences."
+
+
+@pytest.mark.django_db
 def test_update_settings_multiple_fields(client):
     reg = client.post(
         REGISTER_URL,
@@ -357,6 +400,7 @@ def test_update_settings_multiple_fields(client):
         data={
             "timezone": "Asia/Tokyo",
             "prompt_instructions": "Focus on urgent tasks first.",
+            "persona": "minimal",
         },
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
@@ -366,6 +410,47 @@ def test_update_settings_multiple_fields(client):
     data = response.json()
     assert data["timezone"] == "Asia/Tokyo"
     assert data["prompt_instructions"] == "Focus on urgent tasks first."
+    assert data["persona"] == "minimal"
+
+
+@pytest.mark.django_db
+def test_update_settings_rejects_invalid_persona(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-bad-persona@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"persona": "verbose"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid persona."
+
+
+@pytest.mark.django_db
+def test_update_settings_rejects_blank_custom_persona(client):
+    reg = client.post(
+        REGISTER_URL,
+        data={"email": "settings-blank-custom@example.com", "password": "secret123"},
+        content_type="application/json",
+    )
+    token = reg.json()["token"]
+
+    response = client.patch(
+        SETTINGS_URL,
+        data={"persona": "custom", "custom_persona": "   "},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Custom persona instructions are required."
 
 
 @pytest.mark.django_db

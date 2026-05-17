@@ -16,10 +16,34 @@ function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
 
+const personaOptions = [
+  {
+    value: "helpful",
+    label: "Helpful",
+    description:
+      "Professional and friendly. Keeps replies concise and list-oriented.",
+  },
+  {
+    value: "encouraging",
+    label: "Encouraging",
+    description: "Warmer and more upbeat while still keeping replies concise.",
+  },
+  {
+    value: "minimal",
+    label: "Minimal",
+    description: "Dry, terse, and strictly functional.",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    description: "Use your own tone instructions for future chats.",
+  },
+] as const
+
 function SettingsSkeleton() {
   return (
     <div className="grid gap-4">
-      {[0, 1].map((index) => (
+      {[0, 1, 2].map((index) => (
         <div key={index} className="rounded-lg border border-border bg-card p-4">
           <Skeleton className="h-5 w-48" />
           <Skeleton className="mt-3 h-4 w-full max-w-lg" />
@@ -39,6 +63,10 @@ export function SettingsPage() {
   const [promptInstructionsDraft, setPromptInstructionsDraft] = useState<
     string | null
   >(null)
+  const [personaDraft, setPersonaDraft] = useState<string | null>(null)
+  const [customPersonaDraft, setCustomPersonaDraft] = useState<string | null>(
+    null
+  )
   const [actionError, setActionError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
@@ -58,8 +86,14 @@ export function SettingsPage() {
     settingsQuery.data?.prompt_instructions ?? ""
   const promptInstructions =
     promptInstructionsDraft ?? savedPromptInstructions
+  const savedPersona = settingsQuery.data?.persona ?? "helpful"
+  const persona = personaDraft ?? savedPersona
+  const savedCustomPersona = settingsQuery.data?.custom_persona ?? ""
+  const customPersona = customPersonaDraft ?? savedCustomPersona
   const timezoneChanged = timezone !== savedTimezone
   const promptChanged = promptInstructions !== savedPromptInstructions
+  const personaChanged =
+    persona !== savedPersona || customPersona !== savedCustomPersona
 
   const timezoneOptions = useMemo(() => {
     return timezoneOptionsWithSelected(timezone || null)
@@ -102,14 +136,31 @@ export function SettingsPage() {
     }
   }
 
+  async function handleSavePersona(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setActionError(null)
+    setStatusMessage(null)
+
+    try {
+      await updateMutation.mutateAsync({
+        body: { persona, custom_persona: customPersona },
+      })
+      setPersonaDraft(null)
+      setCustomPersonaDraft(null)
+      setStatusMessage("Persona saved.")
+    } catch (err) {
+      setActionError(getErrorMessage(err, "Failed to save persona."))
+    }
+  }
+
   return (
     <div className="flex w-full max-w-none flex-1 flex-col gap-5">
       <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <h1 className="text-page-title">Settings</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage your timezone and the instructions TaskRaptor should keep in
-            mind.
+            Manage your timezone, chat persona, and the instructions TaskRaptor
+            should keep in mind.
           </p>
         </div>
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -159,6 +210,69 @@ export function SettingsPage() {
                   {updateMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </div>
+            </form>
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-4">
+            <form className="max-w-2xl" onSubmit={handleSavePersona}>
+              <h2 className="text-section-title">Chat persona</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Choose how TaskRaptor should sound in future chats.
+              </p>
+              <div className="mt-4 grid gap-2">
+                <Label htmlFor="persona">Persona</Label>
+                <select
+                  id="persona"
+                  value={persona}
+                  onChange={(event) => {
+                    setPersonaDraft(event.target.value)
+                    setActionError(null)
+                    setStatusMessage(null)
+                  }}
+                  className="h-9 w-full max-w-md rounded-3xl border border-input bg-input/50 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={updateMutation.isPending}
+                >
+                  {personaOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-muted-foreground">
+                  {
+                    personaOptions.find((option) => option.value === persona)
+                      ?.description
+                  }
+                </p>
+              </div>
+              {persona === "custom" ? (
+                <div className="mt-4 grid gap-2">
+                  <Label htmlFor="custom-persona">Custom tone</Label>
+                  <Textarea
+                    id="custom-persona"
+                    value={customPersona}
+                    onChange={(event) =>
+                      setCustomPersonaDraft(event.target.value)
+                    }
+                    placeholder="Example: Use clipped sentences and avoid upbeat phrasing."
+                    className="min-h-32"
+                    disabled={updateMutation.isPending}
+                  />
+                </div>
+              ) : null}
+              {personaChanged ? (
+                <div className="mt-4">
+                  <Button
+                    type="submit"
+                    disabled={
+                      updateMutation.isPending ||
+                      (persona === "custom" && !customPersona.trim())
+                    }
+                  >
+                    {updateMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              ) : null}
             </form>
           </section>
 

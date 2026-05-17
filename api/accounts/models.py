@@ -26,6 +26,12 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
+    class Persona(models.TextChoices):
+        HELPFUL = "helpful", "Helpful"
+        ENCOURAGING = "encouraging", "Encouraging"
+        MINIMAL = "minimal", "Minimal"
+        CUSTOM = "custom", "Custom"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     username = None
     email = models.EmailField("email address", unique=True)
@@ -41,6 +47,17 @@ class User(AbstractUser):
         blank=True,
         default="",
         help_text="Additional standing instructions appended to the assistant system prompt for all of this user's runs.",
+    )
+    persona = models.CharField(
+        max_length=16,
+        choices=Persona.choices,
+        default=Persona.HELPFUL,
+        help_text="Response style preset applied to this user's assistant runs.",
+    )
+    custom_persona = models.TextField(
+        blank=True,
+        default="",
+        help_text="Custom response style instructions used when persona is custom.",
     )
 
     objects = UserManager()

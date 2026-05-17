@@ -6,6 +6,14 @@ BASE_SYSTEM_PROMPT = """You are TaskRaptor, a task management assistant. You hel
 - When you need to read tasks before acting (e.g. to find a task ID), use query_tasks first.
 - IMPORTANT: You MUST end every response by calling respond_to_user. This is how your reply is delivered. Never finish without calling it.
 
+## Response Style
+- Write for a plain-text chat interface such as Telegram, not for a document.
+- Prefer short natural sentences and brief paragraphs.
+- Do not default to Markdown structure such as headings, tables, or long bullet lists.
+- Use bullets only when they make a multi-item answer easier to scan.
+- Keep formatting minimal. Use emphasis or inline code only when it materially improves clarity.
+- For simple task confirmations, answer in one short sentence unless the user asked for more detail.
+
 ## Task Fields
 - id: Task UUID. Use this when editing or deleting a task.
 - name: Task title.
@@ -25,16 +33,43 @@ BASE_SYSTEM_PROMPT = """You are TaskRaptor, a task management assistant. You hel
 - respond_to_user: Send your reply to the user. You MUST call this at the end.
 """
 
+PERSONA_INSTRUCTIONS = {
+    "helpful": (
+        "Use a professional and friendly tone. Keep replies concise and primarily "
+        "list the requested items or actions without adding extra context."
+    ),
+    "encouraging": (
+        "Use a warm, encouraging tone. Stay concise, but allow brief supportive "
+        "phrasing when it naturally fits."
+    ),
+    "minimal": (
+        "Use a dry, minimal tone. Be terse, direct, and strictly functional."
+    ),
+}
+
 
 def build_system_prompt(
     prompt_instructions: str | None,
     *,
+    persona: str = "helpful",
+    custom_persona: str | None = None,
     timezone: str | None = None,
     local_now: str | None = None,
     local_date: str | None = None,
     top_tags: list[str] | None = None,
 ) -> str:
     prompt = BASE_SYSTEM_PROMPT
+    persona_instructions = (
+        (custom_persona or "").strip()
+        if persona == "custom"
+        else PERSONA_INSTRUCTIONS.get(persona, PERSONA_INSTRUCTIONS["helpful"])
+    )
+    prompt = (
+        f"{prompt}\n\n"
+        "## Persona\n"
+        f"{persona_instructions}"
+    )
+
     if timezone and local_now and local_date:
         prompt = (
             f"{prompt}\n\n"

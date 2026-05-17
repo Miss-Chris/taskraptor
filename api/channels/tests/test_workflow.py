@@ -383,6 +383,27 @@ def test_workflow_passes_user_prompt_instructions_into_system_message(
 
 
 @pytest.mark.django_db
+def test_workflow_passes_user_persona_into_system_message(
+    test_user,
+    test_llm_model_offline,
+    test_channel,
+    test_conversation,
+):
+    test_user.persona = "minimal"
+    test_user.save(update_fields=["persona"])
+    scripted = CapturingTextLlm()
+
+    result = handle_user_incoming(
+        test_conversation,
+        "latest request",
+        llm_callable=scripted,
+    )
+
+    assert result.error is None
+    assert "dry, minimal tone" in scripted.calls[0][0]["content"]
+
+
+@pytest.mark.django_db
 def test_workflow_passes_top_active_tags_into_system_message(
     test_user,
     test_llm_model_offline,

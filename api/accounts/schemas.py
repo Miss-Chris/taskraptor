@@ -34,11 +34,15 @@ class UserTimezoneIn(Schema):
 class UserSettingsOut(Schema):
     timezone: str | None
     prompt_instructions: str
+    persona: str
+    custom_persona: str
 
 
 class UserSettingsPatchIn(Schema):
     timezone: str | None = None
     prompt_instructions: str | None = None
+    persona: str | None = None
+    custom_persona: str | None = None
 
 
 class ErrorOut(Schema):

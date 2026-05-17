@@ -36,3 +36,29 @@ def test_user_prompt_instructions_persists_custom_value():
     user.refresh_from_db()
 
     assert user.prompt_instructions == "Always format due dates as YYYY-MM-DD."
+
+
+@pytest.mark.django_db
+def test_user_persona_defaults_to_helpful():
+    user = User.objects.create_user(
+        email="persona_default@example.com",
+        password="testpass123",
+    )
+
+    assert user.persona == User.Persona.HELPFUL
+    assert user.custom_persona == ""
+
+
+@pytest.mark.django_db
+def test_user_custom_persona_persists_custom_value():
+    user = User.objects.create_user(
+        email="persona_custom@example.com",
+        password="testpass123",
+        persona=User.Persona.CUSTOM,
+        custom_persona="Use clipped sentences.",
+    )
+
+    user.refresh_from_db()
+
+    assert user.persona == User.Persona.CUSTOM
+    assert user.custom_persona == "Use clipped sentences."

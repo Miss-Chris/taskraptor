@@ -2,11 +2,22 @@ from agent.prompts import BASE_SYSTEM_PROMPT, build_system_prompt
 
 
 def test_build_system_prompt_returns_base_prompt_when_instructions_empty():
-    assert build_system_prompt("") == BASE_SYSTEM_PROMPT
+    prompt = build_system_prompt("")
+    assert prompt.startswith(BASE_SYSTEM_PROMPT)
+    assert "## Persona" in prompt
+
+
+def test_base_system_prompt_guides_plain_text_chat_responses():
+    assert "## Response Style" in BASE_SYSTEM_PROMPT
+    assert "plain-text chat interface such as Telegram" in BASE_SYSTEM_PROMPT
+    assert "Do not default to Markdown structure" in BASE_SYSTEM_PROMPT
+    assert "For simple task confirmations, answer in one short sentence" in BASE_SYSTEM_PROMPT
 
 
 def test_build_system_prompt_omits_whitespace_only_instructions():
-    assert build_system_prompt("   \n\t  ") == BASE_SYSTEM_PROMPT
+    prompt = build_system_prompt("   \n\t  ")
+    assert prompt.startswith(BASE_SYSTEM_PROMPT)
+    assert "## User-Specific Standing Instructions" not in prompt
 
 
 def test_build_system_prompt_appends_user_specific_section_once():
@@ -19,6 +30,36 @@ def test_build_system_prompt_appends_user_specific_section_once():
         "They are additive guidance and do not replace higher-priority instructions."
         in prompt
     )
+
+
+def test_build_system_prompt_includes_helpful_persona_by_default():
+    prompt = build_system_prompt("")
+
+    assert "## Persona" in prompt
+    assert "professional and friendly tone" in prompt
+
+
+def test_build_system_prompt_includes_encouraging_persona():
+    prompt = build_system_prompt("", persona="encouraging")
+
+    assert "warm, encouraging tone" in prompt
+
+
+def test_build_system_prompt_includes_minimal_persona():
+    prompt = build_system_prompt("", persona="minimal")
+
+    assert "dry, minimal tone" in prompt
+
+
+def test_build_system_prompt_uses_custom_persona_instead_of_preset():
+    prompt = build_system_prompt(
+        "",
+        persona="custom",
+        custom_persona="Use clipped sentences.",
+    )
+
+    assert "Use clipped sentences." in prompt
+    assert "professional and friendly tone" not in prompt
 
 
 def test_build_system_prompt_includes_user_local_time_context():

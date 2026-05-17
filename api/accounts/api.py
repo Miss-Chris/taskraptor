@@ -115,6 +115,26 @@ def update_settings(request, payload: UserSettingsPatchIn):
         user.prompt_instructions = payload.prompt_instructions
         update_fields.append("prompt_instructions")
 
+    next_persona = payload.persona or user.persona
+    next_custom_persona = (
+        payload.custom_persona
+        if payload.custom_persona is not None
+        else user.custom_persona
+    )
+
+    if payload.persona is not None:
+        if payload.persona not in User.Persona.values:
+            return Status(400, {"detail": "Invalid persona."})
+        user.persona = payload.persona
+        update_fields.append("persona")
+
+    if payload.custom_persona is not None:
+        user.custom_persona = payload.custom_persona
+        update_fields.append("custom_persona")
+
+    if next_persona == User.Persona.CUSTOM and not next_custom_persona.strip():
+        return Status(400, {"detail": "Custom persona instructions are required."})
+
     if update_fields:
         user.save(update_fields=update_fields)
 

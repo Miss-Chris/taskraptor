@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health */
+        get: operations["taskraptor_api_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/register": {
         parameters: {
             query?: never;
@@ -500,6 +517,13 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** HealthOut */
+        HealthOut: {
+            /** Status */
+            status: string;
+            /** Database */
+            database: string;
+        };
         /** TokenOut */
         TokenOut: {
             /** Token */
@@ -548,7 +572,7 @@ export interface components {
         /** UserTimezoneIn */
         UserTimezoneIn: {
             /** Timezone */
-            timezone: string | null;
+            timezone: string;
         };
         /** UserSettingsOut */
         UserSettingsOut: {
@@ -556,6 +580,10 @@ export interface components {
             timezone: string | null;
             /** Prompt Instructions */
             prompt_instructions: string;
+            /** Persona */
+            persona: string;
+            /** Custom Persona */
+            custom_persona: string;
         };
         /** UserSettingsPatchIn */
         UserSettingsPatchIn: {
@@ -563,6 +591,10 @@ export interface components {
             timezone?: string | null;
             /** Prompt Instructions */
             prompt_instructions?: string | null;
+            /** Persona */
+            persona?: string | null;
+            /** Custom Persona */
+            custom_persona?: string | null;
         };
         /** AutomationListOut */
         AutomationListOut: {
@@ -838,7 +870,11 @@ export interface components {
             /** Email */
             email: string;
             /** Timezone */
-            timezone: string;
+            timezone: string | null;
+            /** Persona */
+            persona: string;
+            /** Custom Persona Present */
+            custom_persona_present: boolean;
             /** Prompt Instructions Present */
             prompt_instructions_present: boolean;
             /** Prompt Instructions Length */
@@ -1359,6 +1395,35 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    taskraptor_api_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthOut"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthOut"];
+                };
+            };
+        };
+    };
     accounts_api_register: {
         parameters: {
             query?: never;
@@ -1383,6 +1448,15 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

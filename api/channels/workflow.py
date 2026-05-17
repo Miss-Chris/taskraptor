@@ -154,6 +154,8 @@ def handle_user_incoming(
         local_context = local_now_context(channel.user.timezone)
         system_prompt = build_system_prompt(
             channel.user.prompt_instructions,
+            persona=channel.user.persona,
+            custom_persona=channel.user.custom_persona,
             timezone=local_context["timezone"],
             local_now=local_context["local_now"],
             local_date=local_context["local_date"],

@@ -28,6 +28,8 @@ def debug_user(db):
         email="debug@example.com",
         password="testpass123",
         prompt_instructions="Keep replies short.",
+        persona=User.Persona.CUSTOM,
+        custom_persona="Use clipped sentences.",
     )
 
 
@@ -145,6 +147,8 @@ def test_debug_bundle_contains_agent_details_and_redacts_secrets(
     assert response.status_code == 200
     data = response.json()
     assert data["user"]["email"] == "debug@example.com"
+    assert data["user"]["persona"] == "custom"
+    assert data["user"]["custom_persona_present"] is True
     assert data["user"]["prompt_instructions_present"] is True
     assert data["channel"]["type"] == "web"
     assert len(data["visible_messages"]) == 2
@@ -183,7 +187,10 @@ def test_dump_agent_debug_outputs_markdown_and_redacts_secret(debug_conversation
     assert "# TaskRaptor Agent Debug Snapshot" in text
     assert "Rename the original task" in text
     assert "Updated task" in text
+    assert "persona: `custom`" in text
+    assert "custom_persona_present: True" in text
     assert "api_key=[redacted]" in text
+    assert "Use clipped sentences." not in text
     assert "sk-debug-secret" not in text
 
 
