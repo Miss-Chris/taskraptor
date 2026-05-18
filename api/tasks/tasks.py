@@ -58,6 +58,7 @@ def dispatch_due_task_reminders() -> int:
             continue
         run_task_reminder.delay(str(task.pk))
         queued += 1
+    logger.info("[tasks] dispatched due reminders queued=%s", queued)
     return queued
 
 

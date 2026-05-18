@@ -21,8 +21,10 @@ import pytest
 
 from agent.models import AgentRun, AgentRunStatus, MessageLog
 from agent.schemas import AgentResult
-from channels.workflow import handle_user_incoming
+from channels.workflow import handle_system_message, handle_user_incoming
 from tasks.models import DueType, Task
+from tasks.reminders import build_task_reminder_prompt
+from tasks.services import create_task
 
 
 def _audit_turn(turn_idx: int, user_text: str, result: AgentResult) -> None:
@@ -168,3 +170,39 @@ def test_multi_turn_workflow(test_user, test_llm_model, test_conversation):
     assert all(r.status == AgentRunStatus.COMPLETED for r in agent_runs), (
         "All AgentRun rows should be completed"
     )
+
+
+@pytest.mark.live_api
+@pytest.mark.django_db
+def test_task_reminder_delivery_not_rescheduled(
+    test_user,
+    test_llm_model,
+    test_conversation,
+):
+    """
+    A fired reminder should be delivered as a notification, not interpreted as
+    a fresh instruction to schedule another reminder.
+    """
+    test_user.timezone = "America/Toronto"
+    test_user.save(update_fields=["timezone"])
+    task = create_task(user_id=test_user.pk, name="Park the car")
+
+    result = handle_system_message(
+        test_conversation.channel,
+        build_task_reminder_prompt(task),
+    )
+
+    if os.environ.get("WORKFLOW_AUDIT") == "1":
+        _audit_turn(1, build_task_reminder_prompt(task), result)
+
+    assert result.error is None
+    assert result.response_text
+    assert "park" in result.response_text.lower()
+    tool_names = [
+        msg.tool_name
+        for msg in result.new_messages
+        if msg.actor == "tool_call"
+    ]
+    assert "set_task_reminder" not in tool_names
+    task.refresh_from_db()
+    assert task.remind_at is None

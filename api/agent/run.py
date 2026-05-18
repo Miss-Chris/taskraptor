@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -28,6 +29,12 @@ from agent.utils import trim_history_for_context
 
 MAX_ITERATIONS = 10
 RESPOND_TO_USER_TOOL = "respond_to_user"
+MODEL_CONFIGURATION_HELP_MESSAGE = (
+    "I couldn't use your current AI model. Open TaskRaptor, go to Models, "
+    "then add or update a provider key and make sure the model is active."
+)
+
+logger = logging.getLogger(__name__)
 
 
 def run_agent(
@@ -198,6 +205,12 @@ def run_agent(
                 )
 
     except QuotaExceededError:
+        logger.warning(
+            "[agent] quota exceeded user_id=%s llm_model_id=%s iterations=%s",
+            user_id,
+            llm_model.pk,
+            iterations,
+        )
         fallback = "You've used up your message quota. Please upgrade or wait for it to reset."
         new_messages.append(NewMessage(actor="assistant", content=fallback))
         return AgentResult(
@@ -211,7 +224,14 @@ def run_agent(
         )
 
     except (InactiveLlmModelError, MissingApiKeyError) as exc:
-        fallback = "Your AI configuration needs attention. Please check your settings."
+        logger.warning(
+            "[agent] model unavailable user_id=%s llm_model_id=%s iterations=%s error=%s",
+            user_id,
+            llm_model.pk,
+            iterations,
+            exc,
+        )
+        fallback = MODEL_CONFIGURATION_HELP_MESSAGE
         new_messages.append(NewMessage(actor="assistant", content=fallback))
         return AgentResult(
             response_text=fallback,
@@ -224,6 +244,12 @@ def run_agent(
         )
 
     except Exception as exc:
+        logger.exception(
+            "[agent] unexpected failure user_id=%s llm_model_id=%s iterations=%s",
+            user_id,
+            llm_model.pk,
+            iterations,
+        )
         fallback = "Something went wrong. Please try again."
         new_messages.append(NewMessage(actor="assistant", content=fallback))
         return AgentResult(

@@ -66,6 +66,7 @@ def dispatch_due_automations() -> int:
         run_automation.delay(str(automation.pk))
         queued += 1
 
+    logger.info("[automations] dispatched due automations queued=%s", queued)
     return queued
 
 

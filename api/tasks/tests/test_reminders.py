@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from channels.models import Channel, ChannelType
 from tasks.models import TaskStatus
-from tasks.reminders import run_task_reminder_on_active_channels
+from tasks.reminders import build_task_reminder_prompt, run_task_reminder_on_active_channels
 from tasks.services import create_task
 from tasks.tasks import dispatch_due_task_reminders, run_task_reminder
 
@@ -74,7 +74,7 @@ def test_run_task_reminder_executes_once_and_marks_reminded_at(monkeypatch, test
     assert run_task_reminder(task.pk) is False
     task.refresh_from_db()
     web = Channel.objects.get(user=test_user, type=ChannelType.WEB)
-    assert calls == [(web.pk, "Remind the user about this task now: Call mom")]
+    assert calls == [(web.pk, build_task_reminder_prompt(task))]
     assert task.reminded_at == now
 
 
@@ -124,6 +124,6 @@ def test_run_task_reminder_fans_out_to_active_channels(monkeypatch, test_user):
     assert run_task_reminder_on_active_channels(task) == 2
     web = Channel.objects.get(user=test_user, type=ChannelType.WEB)
     assert calls == [
-        (telegram.pk, "Remind the user about this task now: Fan out"),
-        (web.pk, "Remind the user about this task now: Fan out"),
+        (telegram.pk, build_task_reminder_prompt(task)),
+        (web.pk, build_task_reminder_prompt(task)),
     ]

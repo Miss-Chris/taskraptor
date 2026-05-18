@@ -21,12 +21,14 @@ JOIN_SUCCESS_MESSAGE = "You're connected to TaskRaptor. You can start chatting n
 JOIN_FAILURE_MESSAGE = "Something went wrong linking your account. Please try again later."
 UNLINKED_CHAT_MESSAGE = "This chat is not linked to TaskRaptor. Use a join code from the app first."
 NO_ACTIVE_MODEL_MESSAGE = (
-    "No active AI model is configured for your account. Please add one in TaskRaptor."
+    "I couldn't find an active AI model for your account. Open TaskRaptor, "
+    "go to Models, and add or activate a model to keep chatting."
 )
 WORKFLOW_FAILURE_MESSAGE = "Something went wrong processing your message. Please try again later."
 UNSUPPORTED_ATTACHMENT_MESSAGE = "I can currently read photos and UTF-8 text files."
 NO_IMAGE_MODEL_MESSAGE = (
-    "Image attachments need at least one configured image-capable model on your account."
+    "I can read images once an image-capable model is set up. Open TaskRaptor, "
+    "go to Models, and add or activate a model with image support."
 )
 
 
@@ -71,17 +73,18 @@ def handle_telegram_text(chat_id: str, text: str) -> None:
     if not normalized_text:
         return
 
-    channel = find_channel_by_telegram_chat_id(chat_id)
-    if channel is None:
-        safe_send_telegram_message(
-            chat_id,
-            UNLINKED_CHAT_MESSAGE,
-            log_context="unlink notice",
-        )
-        return
-
-    runtime_conversation = get_conversation(channel.pk)
+    channel = None
     try:
+        channel = find_channel_by_telegram_chat_id(chat_id)
+        if channel is None:
+            safe_send_telegram_message(
+                chat_id,
+                UNLINKED_CHAT_MESSAGE,
+                log_context="unlink notice",
+            )
+            return
+
+        runtime_conversation = get_conversation(channel.pk)
         handle_user_incoming(runtime_conversation.conversation, normalized_text)
     except NoActiveLlmModel:
         safe_send_telegram_message(
@@ -91,13 +94,13 @@ def handle_telegram_text(chat_id: str, text: str) -> None:
         )
     except Exception:
         logger.exception(
-            "telegram webhook: handle_user_incoming failed channel_id=%s",
-            channel.pk,
+            "telegram webhook: text processing failed channel_id=%s",
+            getattr(channel, "pk", None),
         )
         safe_send_telegram_message(
             chat_id,
             WORKFLOW_FAILURE_MESSAGE,
-            log_context="workflow error",
+            log_context="text processing error",
         )
 
 
@@ -110,16 +113,17 @@ def handle_telegram_attachment(
     file_name: str = "",
     mime_type: str = "",
 ) -> None:
-    channel = find_channel_by_telegram_chat_id(chat_id)
-    if channel is None:
-        safe_send_telegram_message(
-            chat_id,
-            UNLINKED_CHAT_MESSAGE,
-            log_context="unlink notice",
-        )
-        return
-
+    channel = None
     try:
+        channel = find_channel_by_telegram_chat_id(chat_id)
+        if channel is None:
+            safe_send_telegram_message(
+                chat_id,
+                UNLINKED_CHAT_MESSAGE,
+                log_context="unlink notice",
+            )
+            return
+
         message = build_attachment_user_message(
             channel.user,
             attachment_kind=attachment_kind,
@@ -145,7 +149,7 @@ def handle_telegram_attachment(
     except Exception:
         logger.exception(
             "telegram webhook: attachment conversion failed channel_id=%s",
-            channel.pk,
+            getattr(channel, "pk", None),
         )
         safe_send_telegram_message(
             chat_id,
@@ -154,8 +158,8 @@ def handle_telegram_attachment(
         )
         return
 
-    runtime_conversation = get_conversation(channel.pk)
     try:
+        runtime_conversation = get_conversation(channel.pk)
         handle_user_incoming(runtime_conversation.conversation, message)
     except NoActiveLlmModel:
         safe_send_telegram_message(
@@ -165,11 +169,11 @@ def handle_telegram_attachment(
         )
     except Exception:
         logger.exception(
-            "telegram webhook: handle_user_incoming failed channel_id=%s",
-            channel.pk,
+            "telegram webhook: attachment processing failed channel_id=%s",
+            getattr(channel, "pk", None),
         )
         safe_send_telegram_message(
             chat_id,
             WORKFLOW_FAILURE_MESSAGE,
-            log_context="workflow error",
+            log_context="attachment processing error",
         )

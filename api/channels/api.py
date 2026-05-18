@@ -16,6 +16,7 @@ from channels.tasks import (
     process_telegram_text,
 )
 from channels.telegram import create_join_code, get_active_telegram_channel, set_telegram_webhook
+from channels.telegram_handlers import WORKFLOW_FAILURE_MESSAGE, safe_send_telegram_message
 from channels.telegram_webhook import parse_telegram_webhook_body
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,11 @@ def telegram_webhook(request: HttpRequest) -> JsonResponse:
                 "telegram webhook: failed to enqueue join chat_id=%s",
                 event.chat_id,
             )
+            safe_send_telegram_message(
+                event.chat_id,
+                WORKFLOW_FAILURE_MESSAGE,
+                log_context="join enqueue error",
+            )
     elif event.action == "text" and event.chat_id:
         try:
             process_telegram_text.delay(event.chat_id, event.text)
@@ -62,6 +68,11 @@ def telegram_webhook(request: HttpRequest) -> JsonResponse:
             logger.exception(
                 "telegram webhook: failed to enqueue text chat_id=%s",
                 event.chat_id,
+            )
+            safe_send_telegram_message(
+                event.chat_id,
+                WORKFLOW_FAILURE_MESSAGE,
+                log_context="text enqueue error",
             )
     elif (
         event.action == "attachment"
@@ -82,6 +93,11 @@ def telegram_webhook(request: HttpRequest) -> JsonResponse:
             logger.exception(
                 "telegram webhook: failed to enqueue attachment chat_id=%s",
                 event.chat_id,
+            )
+            safe_send_telegram_message(
+                event.chat_id,
+                WORKFLOW_FAILURE_MESSAGE,
+                log_context="attachment enqueue error",
             )
 
     return JsonResponse({"ok": True})

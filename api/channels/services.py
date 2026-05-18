@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from django.utils import timezone
@@ -11,6 +12,8 @@ from channels.runtime import (
     TelegramConversation,
     WebConversation,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_conversation(channel_id: UUID, conversation_id: UUID | None = None) -> BaseConversation:
@@ -26,6 +29,12 @@ def get_conversation(channel_id: UUID, conversation_id: UUID | None = None) -> B
         )
         if conversation is None:
             conversation = Conversation.objects.create(channel=channel)
+            logger.info(
+                "[channels] created conversation channel_id=%s conversation_id=%s channel_type=%s",
+                channel.pk,
+                conversation.pk,
+                channel.type,
+            )
 
     match channel.type:
         case ChannelType.TELEGRAM:

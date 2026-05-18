@@ -195,7 +195,7 @@ function ModelDialog({
             <DialogDescription>
               {isEdit
                 ? "Update the API key or context limit for this model."
-                : "Connect your own Anthropic, DeepSeek, or OpenAI API key."}
+                : "Choose a model, paste that provider's API key, and keep it active to use it in chats."}
             </DialogDescription>
           </DialogHeader>
 
@@ -302,6 +302,7 @@ function ModelDialog({
 
 function CurrentlyUsingCard({ model }: { model: UsageLlmModel }) {
   const name = humanizeDisplayName(model.display_name, model.provider)
+  const needsApiKey = !model.is_system && !model.has_api_key
 
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -323,6 +324,7 @@ function CurrentlyUsingCard({ model }: { model: UsageLlmModel }) {
             {model.supports_image_input && (
               <StatusPill tone="neutral">Images</StatusPill>
             )}
+            {needsApiKey && <StatusPill tone="danger">Needs key</StatusPill>}
             {!model.is_available && (
               <StatusPill tone="danger">Unavailable</StatusPill>
             )}
@@ -351,12 +353,19 @@ function CurrentlyUsingCard({ model }: { model: UsageLlmModel }) {
               </p>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Tokens used:{" "}
-              <span className="font-medium text-foreground">
-                {formatTokenCount(model.quota_used)}
-              </span>
-            </p>
+            <>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Tokens used:{" "}
+                <span className="font-medium text-foreground">
+                  {formatTokenCount(model.quota_used)}
+                </span>
+              </p>
+              {needsApiKey ? (
+                <p className="mt-2 text-sm text-destructive">
+                  Add a provider API key before this model can answer chats.
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </div>
@@ -379,6 +388,7 @@ function ModelListItem({
 }) {
   const name = humanizeDisplayName(model.display_name, model.provider)
   const canDelete = !model.is_system && !model.is_active
+  const needsApiKey = !model.is_system && !model.has_api_key
 
   return (
     <div className="flex items-start gap-3 p-4">
@@ -405,6 +415,7 @@ function ModelListItem({
               {model.supports_image_input && (
                 <StatusPill tone="neutral">Images</StatusPill>
               )}
+              {needsApiKey && <StatusPill tone="danger">Needs key</StatusPill>}
               {model.is_active && !model.is_available && (
                 <StatusPill tone="danger">Unavailable</StatusPill>
               )}
@@ -621,7 +632,7 @@ export function ModelsPage() {
             ? "Loading model settings..."
             : activeModel
               ? `Using ${humanizeDisplayName(activeModel.display_name, activeModel.provider)}.`
-              : "No active model found."}
+              : "No active model found. Add a provider key or activate an available model."}
         </p>
       </header>
 

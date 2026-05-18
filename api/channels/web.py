@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from accounts.models import User
 
 DEFAULT_WEB_CHANNEL_NAME = "Web"
+logger = logging.getLogger(__name__)
 
 
 def get_or_create_default_web_channel(user) -> Channel:
@@ -30,7 +32,13 @@ def get_or_create_default_web_channel(user) -> Channel:
 
 def create_web_conversation(channel: Channel, title: str = "") -> Conversation:
     """Create a new conversation on a web channel (e.g. \"New chat\")."""
-    return Conversation.objects.create(channel=channel, title=title)
+    conversation = Conversation.objects.create(channel=channel, title=title)
+    logger.info(
+        "[web] created conversation channel_id=%s conversation_id=%s",
+        channel.pk,
+        conversation.pk,
+    )
+    return conversation
 
 
 def _active_llm_model_for_user(user: User) -> LlmModel:
@@ -136,6 +144,12 @@ def queue_web_user_message(conversation: Conversation, message: str) -> tuple[We
         status=AgentRunStatus.PENDING,
     )
     web_message = record_user_message(conversation, message, agent_run=agent_run)
+    logger.info(
+        "[web] queued message conversation_id=%s message_id=%s agent_run_id=%s",
+        conversation.pk,
+        web_message.pk,
+        agent_run.pk,
+    )
     return web_message, agent_run
 
 
@@ -170,6 +184,10 @@ def process_next_pending_web_message(
             .first()
         )
         if pending_run is None:
+            logger.warning(
+                "[web] no pending run conversation_id=%s",
+                conversation.pk,
+            )
             return None
 
         web_message = (
@@ -182,11 +200,22 @@ def process_next_pending_web_message(
             .first()
         )
         if web_message is None:
+            logger.error(
+                "[web] missing queued message conversation_id=%s agent_run_id=%s",
+                conversation.pk,
+                pending_run.pk,
+            )
             pending_run.status = AgentRunStatus.FAILED
             pending_run.error = "Missing queued web user message."
             pending_run.save(update_fields=["status", "error"])
             return pending_run
 
+        logger.info(
+            "[web] processing message conversation_id=%s message_id=%s agent_run_id=%s",
+            conversation.pk,
+            web_message.pk,
+            pending_run.pk,
+        )
         try:
             handle_user_incoming(
                 conversation,
@@ -196,9 +225,22 @@ def process_next_pending_web_message(
                 deliver_on_error=False,
             )
         except Exception as exc:
+            logger.exception(
+                "[web] processing failed conversation_id=%s message_id=%s agent_run_id=%s",
+                conversation.pk,
+                web_message.pk,
+                pending_run.pk,
+            )
             pending_run.status = AgentRunStatus.FAILED
             pending_run.error = str(exc)
             pending_run.completed_at = timezone.now()
             pending_run.save(update_fields=["status", "error", "completed_at"])
         pending_run.refresh_from_db()
+        logger.info(
+            "[web] processed message conversation_id=%s message_id=%s agent_run_id=%s status=%s",
+            conversation.pk,
+            web_message.pk,
+            pending_run.pk,
+            pending_run.status,
+        )
         return pending_run

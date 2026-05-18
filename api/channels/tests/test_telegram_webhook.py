@@ -424,6 +424,31 @@ def test_telegram_webhook_text_enqueues_text_task(client, monkeypatch):
     assert text_calls == [("123", "hello there")]
 
 
+def test_telegram_webhook_text_enqueue_failure_notifies_user(client, monkeypatch):
+    send_calls: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.api.process_telegram_text.delay",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("broker down")),
+    )
+    monkeypatch.setattr(
+        "channels.api.safe_send_telegram_message",
+        lambda chat_id, text, *, log_context: send_calls.append(
+            (chat_id, text, log_context)
+        ),
+    )
+
+    response = client.post(
+        WEBHOOK_URL,
+        data={"message": {"chat": {"id": 123}, "text": "ping"}},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert send_calls == [("123", WORKFLOW_FAILURE_MESSAGE, "text enqueue error")]
+
+
 def test_telegram_webhook_attachment_enqueues_attachment_task(client, monkeypatch):
     attachment_calls: list[tuple[str, str, str, str, str, str]] = []
 
@@ -711,6 +736,71 @@ def test_handle_telegram_text_unexpected_error_sends_generic_message(monkeypatch
     )
 
     handle_telegram_text("123", "hello")
+
+    assert send_calls == [("123", WORKFLOW_FAILURE_MESSAGE)]
+
+
+def test_handle_telegram_text_conversation_lookup_error_sends_generic_message(monkeypatch):
+    channel = SimpleNamespace(pk=7)
+    send_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.telegram_handlers.find_channel_by_telegram_chat_id",
+        lambda chat_id: channel,
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.get_conversation",
+        lambda channel_id: (_ for _ in ()).throw(RuntimeError("db unavailable")),
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.send_telegram_message",
+        lambda chat_id, text: send_calls.append((chat_id, text)),
+    )
+
+    handle_telegram_text("123", "hello")
+
+    assert send_calls == [("123", WORKFLOW_FAILURE_MESSAGE)]
+
+
+def test_handle_telegram_text_channel_lookup_error_sends_generic_message(monkeypatch):
+    send_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.telegram_handlers.find_channel_by_telegram_chat_id",
+        lambda chat_id: (_ for _ in ()).throw(RuntimeError("db unavailable")),
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.send_telegram_message",
+        lambda chat_id, text: send_calls.append((chat_id, text)),
+    )
+
+    handle_telegram_text("123", "hello")
+
+    assert send_calls == [("123", WORKFLOW_FAILURE_MESSAGE)]
+
+
+def test_handle_telegram_attachment_conversation_lookup_error_sends_generic_message(monkeypatch):
+    channel = SimpleNamespace(pk=7, user=object())
+    send_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "channels.telegram_handlers.find_channel_by_telegram_chat_id",
+        lambda chat_id: channel,
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.build_attachment_user_message",
+        lambda *args, **kwargs: "attachment text",
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.get_conversation",
+        lambda channel_id: (_ for _ in ()).throw(RuntimeError("db unavailable")),
+    )
+    monkeypatch.setattr(
+        "channels.telegram_handlers.send_telegram_message",
+        lambda chat_id, text: send_calls.append((chat_id, text)),
+    )
+
+    handle_telegram_attachment("123", "photo", "photo-1")
 
     assert send_calls == [("123", WORKFLOW_FAILURE_MESSAGE)]
 

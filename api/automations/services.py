@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 
 from accounts.models import User
@@ -8,6 +9,8 @@ from channels.models import Channel
 from channels.services import get_conversation
 from channels.web import get_or_create_default_web_channel
 from channels.workflow import handle_system_message
+
+logger = logging.getLogger(__name__)
 
 
 def active_automation_channels(user: User) -> Iterable[Channel]:
@@ -32,4 +35,10 @@ def run_automation_on_active_channels(automation: Automation) -> int:
         get_conversation(channel.pk)
         handle_system_message(channel, automation.prompt)
         count += 1
+    logger.info(
+        "[automations] ran automation automation_id=%s user_id=%s channel_count=%s",
+        automation.pk,
+        automation.user_id,
+        count,
+    )
     return count

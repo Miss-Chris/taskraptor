@@ -380,7 +380,7 @@ export function ChatPage() {
     const failedRun = conversationQuery.data.runs.find(
       (run) => run.status === "failed" && run.error
     )
-    setRunError(failedRun?.error ?? null)
+    setRunError(failedRun?.error ? friendlyRunError(failedRun.error) : null)
   }, [conversationId, conversationQuery.data])
 
   useEffect(() => {
@@ -435,7 +435,7 @@ export function ChatPage() {
         if (cancelled) return
         setRuns((current) => mergeRun(current, nextRun))
         if (nextRun.status === "failed" && nextRun.error) {
-          setRunError(nextRun.error)
+          setRunError(friendlyRunError(nextRun.error))
         }
         if (nextMessages?.messages.length) {
           setMessages((current) =>
@@ -651,4 +651,14 @@ export function ChatPage() {
       </form>
     </div>
   )
+}
+
+function friendlyRunError(error: string): string {
+  if (error === "quota_exceeded") {
+    return "You've used up your message quota. Please upgrade or wait for it to reset."
+  }
+  if (error.includes("API key is missing") || error.includes("not active")) {
+    return "I couldn't use your current AI model. Open Models, then add or update a provider key and make sure the model is active."
+  }
+  return "Something went wrong processing your message. Please try again."
 }
