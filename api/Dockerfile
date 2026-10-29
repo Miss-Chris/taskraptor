@@ -27,4 +27,4 @@ EXPOSE 8000
 
 USER taskraptor
 
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "taskraptor.wsgi:application"]
+CMD ["sh", "-c", "./init.sh && exec uv run gunicorn --bind 0.0.0.0:8000 --workers 1 --timeout 120 --access-logfile - --error-logfile - --capture-output taskraptor.wsgi:application"]
